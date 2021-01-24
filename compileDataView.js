@@ -259,6 +259,41 @@ function compileDataView(input) {
 					byteOffset += (arrayCount ?? 1) * byteCount;
 					break;
 
+				case "char":
+					flushBitfields();
+
+					if (undefined !== bitCount)
+						throw new Error(`char cannot use bitfield at line ${lineNumber}`);
+
+					if (doGet) {
+						output.push(`   get ${name}() {`);
+						if ((undefined === arrayCount) || (1 === arrayCount))
+							output.push(`      return String.fromCharCode(this.getUint8(${byteOffset}));`);
+						else
+							output.push(`      return String.fromArrayBuffer(this.buffer.slice(${byteOffset}, ${byteOffset + arrayCount}));`);
+						output.push(`   }`);
+					}
+
+					if (doSet) {
+						output.push(`   set ${name}(value) {`);
+						if ((undefined === arrayCount) || (1 === arrayCount))
+							output.push(`      return this.setUint8(${byteOffset}, value.charCodeAt());`);
+						else {
+							output.push(`      value = new Uint8Array(ArrayBuffer.fromString(value));`);
+							output.push(`      const byteLength = value.byteLength;`);
+							output.push(`      if (byteLength > ${arrayCount})`);
+							output.push(`         throw new Error("too long");`);
+							output.push(`      for (let i = 0; i < byteLength; i++)`);
+							output.push(`         this.setUint8(${byteOffset} + i, value[i]);`);
+							output.push(`      for (let i = byteLength; i < ${arrayCount}; i++)`);
+							output.push(`         this.setUint8(${byteOffset} + i, 0);`);
+						}
+						output.push(`   }`);
+					}
+
+					byteOffset += arrayCount ?? 1;
+					break;
+
 				case "Uint":
 					if (undefined === bitCount)
 						throw new Error(`number of bits in bitfield missing at line ${lineNumber}`);
