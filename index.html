@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="Description" content="compileDataView">
+		<title>Compile Data View</title>
+		<script type="module" crossorigin src="./compileDataView.js"></script>
+<style>
+html, body, div, pre {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+}
+html, body, div {
+	font-size: 100%;
+	font-family: sans-serif;
+	font-weight: normal;
+	font-style: normal;
+}
+:root {
+  --app-background: #e6ebf3;
+  --app-border: 1px solid #C0C0C0;
+  --app-color: black;
+  --app-item-background: #fcfcfc;
+  --mod-background: #f0f0f0;
+  --mod-border: 1px solid #C0C0C0;
+  --mod-color: black;
+  --mod-item-background: #fcfcfc;
+}
+textarea {
+	resize: none;
+	font-family: monospace;
+	font-size: 16px;
+	font-weight: 500,
+	background-color:#fcfcfc;
+}
+</style>
+</head>
+
+<body>
+
+<row>
+<textarea id="viewDescription" name="viewDescription" rows="40" cols="40" spellcheck="false" autofocus="true">
+class: GeneratedView;
+get: true;
+set: true;
+
+Uint16 size;
+Uint16 origin;
+Uint32 source;
+Uint8 id;
+Uint8 uuid[16];
+
+Boolean b1;
+Boolean b2;
+Boolean b3;
+
+Uint foo:1;
+Uint bar:2;
+Uint grr:4;
+Uint zrr:16;
+Uint yrr:4;
+
+Float32 f32;
+Float64 f64[2];
+BigInt64 big;
+BigUint64 bigger[2];
+Boolean on;
+</textarea>
+
+<textarea id="viewCode" name="viewCode" rows="40" cols="60" readonly="true" spellcheck="false">
+</textarea>
+</row>
+
+<script type="module" crossorigin>
+const viewDescription = document.getElementById('viewDescription');
+const viewCode = document.getElementById('viewCode');
+viewCode.textContent = compileDataView(viewDescription.value);
+
+viewDescription.addEventListener('input', e => {
+	viewCode.textContent = compileDataView(e.target.value);
+});
+
+</script>
+
+</body>
+<//html>
