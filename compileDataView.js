@@ -89,10 +89,11 @@ function flushBitfields(bitsToAdd = 32) {
 
 		if (doSet) {
 			output.push(`   set ${bitfield.name}(value) {`);
-			if (bitfield.boolean)
-				output.push(`      value = value ? 1 : 0;`);
 			output.push(`      const t = this.get${type}(${byteOffset}${endian}) & ${toHex(~(mask << bitOffset), byteCount)};`);
-			output.push(`      this.set${type}(${byteOffset}, t | ((value & ${toHex(mask, byteCount)})${shiftLeft})${endian});`);
+			if (bitfield.boolean)
+				output.push(`      this.set${type}(${byteOffset}, t | (value ? ${toHex(1 << bitOffset)} : 0)${endian});`);
+			else
+				output.push(`      this.set${type}(${byteOffset}, t | ((value & ${toHex(mask, byteCount)})${shiftLeft})${endian});`);
 			output.push(`   }`);
 		}
 
