@@ -17,6 +17,17 @@
 *   along with the Moddable SDK Tools.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/*
+
+	to do:
+
+		- could use (and cache( Uint8Array view of this.buffer for faster strings
+		- "xs" setting -- when false, don't use String.fromArrayBuffer and ArrayBuffer.fromString
+		- bitfields that align to byte and are a multiple of 8 special case
+		- "align" setting - control alignment of 2 and 4 byte fields
+
+*/
+
 const byteCounts = {
 	Int8: 1,
 	Int16: 2,
@@ -309,7 +320,7 @@ function compileDataView(input) {
 				case "Boolean":
 					flushBitfields(1);
 					if (undefined !== arrayCount)
-						throw new Error(`Boolean cannot have array line ${lineNumber}`);
+						throw new Error(`Boolean cannot have array at line ${lineNumber}`);
 
 					if (undefined !== bitCount)
 						throw new Error(`cannot use bitfield with type "${type}" at line ${lineNumber}`);
@@ -345,7 +356,7 @@ function compileDataView(input) {
 
 	if (errors.length) {
 		errors.unshift("*****")
-		errors.push("***")
+		errors.push("*****")
 		errors.push("")
 	}
 

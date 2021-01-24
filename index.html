@@ -5,29 +5,7 @@
 		<meta name="Description" content="compileDataView">
 		<title>Compile Data View</title>
 		<script type="module" crossorigin src="./compileDataView.js"></script>
-<style>
-html, body, div, pre {
-	margin: 0;
-	padding: 0;
-	border: 0;
-	outline: 0;
-}
-html, body, div {
-	font-size: 100%;
-	font-family: sans-serif;
-	font-weight: normal;
-	font-style: normal;
-}
-:root {
-  --app-background: #e6ebf3;
-  --app-border: 1px solid #C0C0C0;
-  --app-color: black;
-  --app-item-background: #fcfcfc;
-  --mod-background: #f0f0f0;
-  --mod-border: 1px solid #C0C0C0;
-  --mod-color: black;
-  --mod-item-background: #fcfcfc;
-}
+		<style>
 textarea {
 	resize: none;
 	font-family: monospace;
@@ -35,12 +13,10 @@ textarea {
 	font-weight: 500,
 	background-color:#fcfcfc;
 }
-</style>
-</head>
-
+		</style>
+	</head>
 <body>
 
-<row>
 <textarea id="viewDescription" name="viewDescription" rows="40" cols="40" spellcheck="false" autofocus="true">
 class: GeneratedView;
 get: true;
@@ -62,16 +38,17 @@ Uint grr:4;
 Uint zrr:16;
 Uint yrr:4;
 
+char a;
+char b[16];
+
 Float32 f32;
 Float64 f64[2];
 BigInt64 big;
 BigUint64 bigger[2];
-Boolean on;
 </textarea>
 
 <textarea id="viewCode" name="viewCode" rows="40" cols="60" readonly="true" spellcheck="false">
 </textarea>
-</row>
 
 <script type="module" crossorigin>
 const viewDescription = document.getElementById('viewDescription');
@@ -81,7 +58,6 @@ viewCode.textContent = compileDataView(viewDescription.value);
 viewDescription.addEventListener('input', e => {
 	viewCode.textContent = compileDataView(e.target.value);
 });
-
 </script>
 
 </body>
