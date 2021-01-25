@@ -114,11 +114,18 @@ function flushBitfields(bitsToAdd = 32) {
 
 		if (doSet) {
 			output.push(`   set ${bitfield.name}(value) {`);
-			output.push(`      const t = this.get${type}(${byteOffset}${endian}) & ${toHex(~(mask << bitOffset), byteCount)};`);
-			if (bitfield.boolean)
-				output.push(`      this.set${type}(${byteOffset}, t | (value ? ${toHex(1 << bitOffset)} : 0)${endian});`);
-			else
+			if (bitfield.boolean) {
+				output.push(`      const t = this.get${type}(${byteOffset}${endian});`);
+				output.push(`      this.set${type}(${byteOffset}, value ? (t | ${toHex(1 << bitOffset)}) : (t & ${toHex(~(mask << bitOffset), byteCount)})${endian});`);
+			}
+			else if (1 === bitfield.bitCount) {
+				output.push(`      const t = this.get${type}(${byteOffset}${endian});`);
+				output.push(`      this.set${type}(${byteOffset}, (value & 1) ? (t | ${toHex(1 << bitOffset)}) : (t & ${toHex(~(mask << bitOffset), byteCount)})${endian});`);
+			}
+			else {
+				output.push(`      const t = this.get${type}(${byteOffset}${endian}) & ${toHex(~(mask << bitOffset), byteCount)};`);
 				output.push(`      this.set${type}(${byteOffset}, t | ((value & ${toHex(mask, byteCount)})${shiftLeft})${endian});`);
+			}
 			output.push(`   }`);
 		}
 
@@ -202,7 +209,7 @@ function compileDataView(input) {
 
 						className = value;
 						if (classes.includes(className))
-							throw new Error(`duplicate className "${className}"`);
+							throw new Error(`duplicate class "${className}"`);
 						classes.push(className);
 						break;
 
