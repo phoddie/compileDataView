@@ -57,10 +57,12 @@ BigUint64 bigger[2];
 <script type="module" crossorigin>
 const viewDescription = document.getElementById('viewDescription');
 const viewCode = document.getElementById('viewCode');
-viewCode.textContent = compileDataView(viewDescription.value);
+const generated = compileDataView(viewDescription.value);
+viewCode.textContent = generated.errors + generated.script;
 
 viewDescription.addEventListener('input', e => {
-	viewCode.textContent = compileDataView(e.target.value);
+	const generated = compileDataView(e.target.value);
+	viewCode.textContent = generated.errors + generated.script;
 });
 </script>
 

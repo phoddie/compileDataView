@@ -8,7 +8,7 @@ Revised: January 24, 2021
 CompileDataView makes it easier to work with binary data structures in JavaScript. There are two big motivations to use binary data in JavaScript:
 
 - To interoperate with existing binary data, for example to exchange binary data over a network or serial connection and to read and write a binary file format. Both of these scenarios are common for JavaScript code written for embedded systems.
-- To reduce memory used for records by storing property values in the most compact binary form rather than as dynamically typed JavaScript values. Memory  is particularly precious on resource constrained devices.
+- To reduce memory required for records by storing property values in a compact binary form rather than as dynamically typed JavaScript values. Memory is particularly precious on resource constrained devices.
 
 ### Example
 The introduction of [DataView](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView) to JavaScript in ES6 made it possible to read and write binary records, but not pleasant. Using CompileDataView, this C data structure:
@@ -149,6 +149,16 @@ class ExampleView extends DataView {
 ...
 ```
 
+The `class` setting may be used to define more than one class in a single description. If the `class` setting appears after any properties have been declared, it causes the current class to be output and a new class to new started with the name specified. The following outputs two classes, `AView` and `BView`:
+
+```
+class AView
+Uint32 a;
+
+class BView
+Uint16 b;
+```
+
 #### `extends`
 The `extends ` setting defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following setting
 
@@ -244,6 +254,9 @@ class CompiledDataView extends DataView {
 The `xs` property controls whether CompileDataView generates code targeting the XS JavaScript engine. The default value is `true`. The only difference in generated code is for string (character array) properties, where CompileDataView uses `String.fromArrayBuffer` and `ArrayBuffer.fromString` in place of `TextDecoder` and `TextEncoder` of the web platform.
 
 At this time there is no option to generate code for strings that works for both XS and the web platform, though it is possible.
+
+#### `byteLength`
+The `byteLength` setting controls whether CompileDataView includes a static `byteLength` property in the generated class with the number of bytes used by the native data structure. Defaults to `false`.
 
 ### Property types
 CompileDataView supports all the types of values provided by `DataView` and adds support for smaller integers using bitfields, arrays of numbers, booleans, characters, and strings.
@@ -343,15 +356,14 @@ CompileDataView is a weekend project to automate the technique. It applies appro
 
 There are some other libraries with a similar goal of simplifying access to native data structures with JavaScript's `DataView`. To use these libraries, if I recall correctly, the developer writes JavaScript to define the data structures. Those are then used to generate JavaScript classes at runtime. That makes good sense in the browser and Node.js, but is impractical on embedded systems. The approach CompileDataView takes offloads the code generation from the embedded device. I also like the idea of using a C-like syntax to define the data structures since many developers working in embedded have a background in C.
 
-As a quick project, CompileDataView is a little rough. I am not skilled in writing parsers and I know little about building web pages. The parser is adequate, but the web page could really use some help (hint, hint).
+As a quick project, CompileDataView is a little rough. I know little about writing parsers and less about building web pages. The parser is adequate, but the web page could really use some help (hint, hint).
 
 CompileDataView is useful as-is. There are areas that could be explored further.
  
 - **Initializers**: In some data structures, some properties should be initialized to a non-zero value. This could be done with the syntax `Int8 foo = 1;` with the assignment applied in the constructor.
 - **ASCII strings**: The `string` type stores UTF-8 which is useful, but 8-bit character data is common enough in many binary formats that it makes sense to support directly.
-- **Date**: It might be useful to allow `Date` objects to be stored directly, as are Booleans.
+- **Date**: It might be useful to allow `Date` objects to be stored directly, as  Booleans are.
 - **Get array by reference**: Array properties are retrieved by value. It would be more efficient in some cases to return them by reference.
-- **Multiple classes in one description**: It would be convenient to define several binary data structures in one file, as they are often used in groups.
-- **Nested data structures**: It would be useful to allow one native data structure to nest another. Allowing multiple classes in a single description would help with this.
+- **Nested data structures**: It would be useful to allow one native data structures to include another.
 
 If you run into an issue or have question, please post it to the [CompileDataView repository](https://github.com/phoddie/compileDataView). You can also reach me on Twitter at [@phoddie](https://twitter.com/phoddie). Pull requests with improvements are welcome.
