@@ -23,6 +23,7 @@
 
 		- bitfields that align to byte and are a multiple of 8 in size special case
 		- could use (and cache) Uint8Array view of this.buffer for faster strings?
+		- initializers
 
 */
 
@@ -133,9 +134,11 @@ function compileDataView(input) {
 	const errors = [];
 
 	for (const lines = input.split("\n"); lines.length; lineNumber += 1) {
+		const originalLine = lines.shift().trimStart().trimEnd();
+
 		try {
 			let bitCount, byteCount, arrayCount;
-			let line = lines.shift().trimStart();
+			let line = originalLine;
 			if (!line)
 				continue;
 
@@ -149,7 +152,7 @@ function compileDataView(input) {
 				const setting = line.slice(0, colon);
 				const semicolon = line.indexOf(";", colon);
 				if (semicolon < 0)
-					throw new Error(`semicolon expected at line ${lineNumber}`);
+					throw new Error(`semicolon expected`);
 				let value = line.slice(colon + 1, semicolon).trimStart().trimEnd();
 				switch (setting) {
 					case "class":
@@ -166,7 +169,7 @@ function compileDataView(input) {
 						else if ("big" == value)
 							littleEndian = false;
 						else
-							throw new Error(`invalid endian "${value}" specified at line ${lineNumber}`);
+							throw new Error(`invalid endian "${value}" specified`);
 						break;
 
 					case "pack":
@@ -175,7 +178,7 @@ function compileDataView(input) {
 						else if ("false" === value)
 							pack = false;
 						else
-							throw new Error(`invalid pack "${value}" specified at line ${lineNumber}`);
+							throw new Error(`invalid pack "${value}" specified`);
 						break;
 
 					case "xs":
@@ -184,7 +187,7 @@ function compileDataView(input) {
 						else if ("false" === value)
 							xs = false;
 						else
-							throw new Error(`invalid xs "${value}" specified at line ${lineNumber}`);
+							throw new Error(`invalid xs "${value}" specified`);
 						break;
 
 					case "set":
@@ -193,7 +196,7 @@ function compileDataView(input) {
 						else if ("false" == value)
 							doSet = false;
 						else
-							throw new Error(`invalid set "${value}" specified at line ${lineNumber}`);
+							throw new Error(`invalid set "${value}" specified`);
 						break;
 
 					case "get":
@@ -202,31 +205,31 @@ function compileDataView(input) {
 						else if ("false" == value)
 							doGet = false;
 						else
-							throw new Error(`invalid get "${value}" specified at line ${lineNumber}`);
+							throw new Error(`invalid get "${value}" specified`);
 						break;
 
 					default:
-						throw new Error(`unknow setting "${setting}" at line ${lineNumber}`);
+						throw new Error(`unknown setting "${setting}"`);
 						break;
 				}
 				continue;
 			}
 
 			if (space < 0)
-				throw new Error(`space expected at line ${lineNumber}`);
+				throw new Error(`space expected`);
 			const type = line.slice(0, space);
 			line = line.slice(space).trimStart();
 
 			let semicolon = line.indexOf(";");
 			if (semicolon < 0)
-				throw new Error(`semicolon expected at line ${lineNumber}`);
+				throw new Error(`semicolon expected`);
 			let name = line.slice(0, semicolon);
 
 			colon = name.indexOf(":");
 			if (colon > 0) {
 				bitCount = parseInt(name.slice(colon + 1));
 				if ((bitCount <= 0) || (bitCount > 32) || isNaN(bitCount))
-					throw new Error(`invalid bit count at line ${lineNumber}`);
+					throw new Error(`invalid bit count`);
 				name = name.slice(0, colon);
 			}
 			else {
@@ -234,16 +237,16 @@ function compileDataView(input) {
 				if (leftBrace >= 0) {
 					let rightBrace = name.indexOf("]");
 					if (rightBrace < 0)
-						throw new Error(`right brace expected at line ${lineNumber}`);
+						throw new Error(`right brace expected`);
 					arrayCount = parseInt(name.slice(leftBrace + 1, rightBrace));
 					if ((arrayCount <= 0) || isNaN(arrayCount))
-						throw new Error(`invalid array count at line ${lineNumber}`);
+						throw new Error(`invalid array count`);
 					name = name.slice(0, leftBrace);
 				}
 			}
 
 			if (names.includes(name))
-				throw new Error(`duplicate name "${name}" at line ${lineNumber}`);
+				throw new Error(`duplicate name "${name}"`);
 			names.push(name);
 
 			switch (type) {
@@ -259,7 +262,7 @@ function compileDataView(input) {
 				case "BigUint64":
 					flushBitfields();
 					if (undefined !== bitCount)
-						throw new Error(`cannot use bitfield with type "${type}" at line ${lineNumber}`);
+						throw new Error(`cannot use bitfield with type "${type}"`);
 
 					const byteCount = byteCounts[type];
 
@@ -303,7 +306,7 @@ function compileDataView(input) {
 					flushBitfields();
 
 					if (undefined !== bitCount)
-						throw new Error(`char cannot use bitfield at line ${lineNumber}`);
+						throw new Error(`char cannot use bitfield`);
 
 					if (doGet) {
 						output.push(`   get ${name}() {`);
@@ -343,7 +346,7 @@ function compileDataView(input) {
 
 				case "Uint":
 					if (undefined === bitCount)
-						throw new Error(`number of bits in bitfield missing at line ${lineNumber}`);
+						throw new Error(`number of bits in bitfield missing`);
 
 					flushBitfields(bitCount);
 
@@ -356,10 +359,10 @@ function compileDataView(input) {
 				case "Boolean":
 					flushBitfields(1);
 					if (undefined !== arrayCount)
-						throw new Error(`Boolean cannot have array at line ${lineNumber}`);
+						throw new Error(`Boolean cannot have array`);
 
 					if (undefined !== bitCount)
-						throw new Error(`cannot use bitfield with type "${type}" at line ${lineNumber}`);
+						throw new Error(`cannot use bitfield with type "${type}"`);
 
 					bitfields.push({
 						name,
@@ -369,11 +372,11 @@ function compileDataView(input) {
 					break;
 
 				default:
-					throw new Error(`unknown type "${type}" at line ${lineNumber}`);
+					throw new Error(`unknown type "${type}"`);
 			}
 		}
 		catch (e) {
-			errors.push(e.toString());
+			errors.push(`   ${e}, line ${lineNumber}: ${originalLine}`);
 		}
 	}
 	flushBitfields();
@@ -391,8 +394,8 @@ function compileDataView(input) {
 	start.push(`   }`);
 
 	if (errors.length) {
-		errors.unshift("*****")
-		errors.push("*****")
+		errors.unshift("/*")
+		errors.push("*/")
 		errors.push("")
 	}
 
