@@ -20,11 +20,6 @@ textarea {
 <script>
 const defaultDescription =
 `class: Integers;
-get: true;
-set: true;
-pack: true;
-xs: true;
-
 Uint16 size;
 Uint32 source;
 Uint8 id;
@@ -44,13 +39,19 @@ Uint yrr:4;
 
 class: CharacterAndStrings;
 char a;
-char b[16];
+char b[15];
 
 class: FloatAndBigInts;
 Float32 f32;
 Float64 f64[2];
 BigInt64 big;
 BigUint64 bigger[2];
+
+class: EmbedAll;
+Integers i;
+BooleansAndBitFields b;
+CharacterAndStrings c;
+FloatAndBigInts f;
 `;
 </script>
 

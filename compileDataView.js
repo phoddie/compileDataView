@@ -22,7 +22,7 @@
 	to do:
 
 		- bitfields that align to byte and are a multiple of 8 in size special case
-		- could use (and cache) Uint8Array view of this.buffer for faster strings?
+		- faster generated code for set of embedded views
 		- initializers
 
 */
@@ -141,14 +141,14 @@ function compileDataView(input) {
 	className = "CompiledDataView";
 	output = [];
 	properties = [];
-	classes = [];
+	classes = {};
 	bitfields = [];
 	byteOffset = 0;
 	lineNumber = 1;
 	littleEndian = true;
 	doSet = true;
 	doGet = true;
-	doExport = false;
+	doExport = true;
 	pack = true;
 	extendsClass = "DataView";
 	xs = true;
@@ -204,15 +204,18 @@ function compileDataView(input) {
 
 							final = final.concat(start, output);
 
+							classes[className] = {
+								byteLength: byteOffset
+							};
+
 							output.length = 0;
 							byteOffset = 0;
 							properties.length = 0;
 						}
 
 						className = value;
-						if (classes.includes(className))
+						if (classes[className])
 							throw new Error(`duplicate class "${className}"`);
-						classes.push(className);
 						break;
 
 					case "extends":
@@ -306,7 +309,7 @@ function compileDataView(input) {
 				case "BigUint64":
 					flushBitfields();
 					if (undefined !== bitCount)
-						throw new Error(`cannot use bitfield with type "${type}"`);
+						throw new Error(`cannot use bitfield with "${type}"`);
 
 					const byteCount = byteCounts[type];
 
@@ -322,7 +325,7 @@ function compileDataView(input) {
 								output.push(`      return this.get${type}(${byteOffset}, ${littleEndian});`);
 						}
 						else {
-							output.push(`      return new ${type}Array(this.buffer.slice(${byteOffset}, ${byteOffset + (arrayCount * byteCount)}));`);
+							output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount * byteCount});`);
 						}
 						output.push(`   }`);
 					}
@@ -402,11 +405,12 @@ function compileDataView(input) {
 
 				case "Boolean":
 					flushBitfields(1);
+
 					if (undefined !== arrayCount)
 						throw new Error(`Boolean cannot have array`);
 
 					if (undefined !== bitCount)
-						throw new Error(`cannot use bitfield with type "${type}"`);
+						throw new Error(`cannot use bitfield with "${type}"`);
 
 					bitfields.push({
 						name,
@@ -416,7 +420,32 @@ function compileDataView(input) {
 					break;
 
 				default:
-					throw new Error(`unknown type "${type}"`);
+					if (!classes[type])
+						throw new Error(`unknown type "${type}"`);
+
+					flushBitfields();
+
+					if (undefined !== arrayCount)
+						throw new Error(`${type} cannot have array`);
+
+					if (undefined !== bitCount)
+						throw new Error(`cannot use bitfield with "${type}"`);
+
+					if (doGet) {
+						output.push(`   get ${name}() {`);
+							output.push(`      return new ${type}(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${classes[type].byteLength});`);
+						output.push(`   }`);
+					}
+
+					if (doSet) {
+						output.push(`   set ${name}(value) {`);
+						output.push(`      for (let i = 0; i < ${classes[type].byteLength}; i++)`);
+						output.push(`         this.setUint8(i + ${byteOffset}, value.getUint8(i));`);
+						output.push(`   }`);
+					}
+
+					byteOffset += classes[type].byteLength;
+					break;
 			}
 		}
 		catch (e) {
