@@ -429,7 +429,7 @@ CompileDataView is a weekend project to automate the technique. It applies appro
 
 There are some other libraries with a similar goal of simplifying access to native data structures with JavaScript's `DataView`. To use these libraries, if I recall correctly, the developer writes JavaScript to define the data structures. Those are then used to generate JavaScript classes at runtime. That makes good sense in the browser and Node.js, but is impractical on embedded systems. The approach CompileDataView takes offloads the code generation from the embedded device. I also like the idea of using a C-like syntax to define the data structures since many developers working in embedded have a background in C.
 
-As a quick project, CompileDataView is a little rough. I know little about writing parsers and less about building web pages. The parser is adequate, but the web page could really use some help (hint, hint).
+As a quick project, CompileDataView is a little rough. I know little about writing parsers and less about building web pages. The parser is adequate, but the [web page](https://phoddie.github.io/compileDataView/) could really use some help (hint, hint).
 
 CompileDataView is useful as-is. There are areas that could be explored further.
  
