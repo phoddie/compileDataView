@@ -17,19 +17,21 @@ textarea {
 	</head>
 <body>
 
-<textarea id="viewDescription" name="viewDescription" rows="40" cols="40" spellcheck="false" autofocus="true">
-class: ExampleDataView;
+<script>
+const defaultDescription =
+`class: Integers;
 get: true;
 set: true;
 pack: true;
 xs: true;
 
 Uint16 size;
-Uint16 origin;
 Uint32 source;
 Uint8 id;
+Uint16 origin;
 Uint8 uuid[16];
 
+class: BooleansAndBitFields;
 Boolean b1;
 Boolean b2;
 Boolean b3;
@@ -40,22 +42,27 @@ Uint grr:4;
 Uint zrr:16;
 Uint yrr:4;
 
+class: CharacterAndStrings;
 char a;
 char b[16];
 
+class: FloatAndBigInts;
 Float32 f32;
 Float64 f64[2];
 BigInt64 big;
 BigUint64 bigger[2];
-</textarea>
+`;
+</script>
 
-<textarea id="viewCode" name="viewCode" rows="40" cols="60" readonly="true" spellcheck="false">
-</textarea>
+<textarea id="viewDescription" name="viewDescription" rows="40" cols="40" spellcheck="false" autofocus="true"></textarea>
+<textarea id="viewCode" name="viewCode" rows="40" cols="60" readonly="true" spellcheck="false"></textarea>
 
 <br>See the CompileDataView <a href="https://github.com/phoddie/compileDataView/">repository</a> for <a href="https://github.com/phoddie/compileDataView/blob/master/readme.md">documentation</a> and <a href="https://github.com/phoddie/compileDataView/blob/master/compileDataView.js">source code</a>.
 
 <script type="module" crossorigin>
 const viewDescription = document.getElementById('viewDescription');
+viewDescription.textContent = defaultDescription;
+
 const viewCode = document.getElementById('viewCode');
 const generated = compileDataView(viewDescription.value);
 viewCode.textContent = generated.errors + generated.script;
