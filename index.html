@@ -27,7 +27,7 @@ const defaultDescription =
    uint8_t uuid[16];
 }
 
-// char is a one character String.
+// char is a one character String
 struct CharacterAndStrings {
    char a;
    char b[15];
@@ -66,7 +66,7 @@ struct EmbedAll {
 struct UnionAll {
    uint8_t kind;
    union {
-      String text[16];
+      char text[16];
       Integers i;
       BooleansAndBitFields b;
       CharacterAndStrings c;
@@ -83,8 +83,6 @@ struct JavaScriptTypes {
    Int8 as;
    Int16 bs;
    Int32 cs;
-
-   String s[8];
 
    Float32 f32;
    Float64 f64;
