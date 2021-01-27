@@ -446,14 +446,10 @@ function compileDataView(input) {
 					break;
 
 				case "char":
-				case "String":
 					flushBitfields();
 
 					if (undefined !== bitCount)
 						throw new Error(`char cannot use bitfield`);
-
-					if (("String" === type) && (undefined == arrayCount))
-						throw new Error(`String requires array count`);
 
 					if (doGet) {
 						output.push(`   get ${name}() {`);
