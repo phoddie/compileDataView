@@ -40,6 +40,21 @@ const byteCounts = {
 	BigUint64: 8
 };
 
+const TypeAliases = {
+	uint8_t:  "Uint8",
+	uint16_t:  "Uint16",
+	uint32_t:  "Uint32",
+	uint64_t:  "BigUint64",
+	int8_t:  "Int8",
+	int16_t:  "Int16",
+	int32_t:  "Int32",
+	int64_t:  "BigInt64",
+	float:  "Float32",
+	double:  "Float64",
+	boolean: "Boolean",
+	bool: "Boolean"
+}
+
 let className;
 let output;
 let classes;
@@ -338,7 +353,7 @@ function compileDataView(input) {
 			let space = line.indexOf(" ");
 			if (space < 0)
 				throw new Error(`space expected`);
-			const type = line.slice(0, space);
+			let type = line.slice(0, space);
 			line = line.slice(space).trimStart();
 
 			let semicolon = line.indexOf(";");
@@ -365,10 +380,17 @@ function compileDataView(input) {
 					name = name.slice(0, leftBrace);
 				}
 			}
+			name = name.trimEnd();
+
+			if (name.includes(" "))		//@@ check for other invalid characters
+				throw new Error(`space in name "${name}"`);
 
 			if (properties.includes(name))
 				throw new Error(`duplicate name "${name}"`);
 			properties.push(name);
+
+			if (TypeAliases[type])
+				type = TypeAliases[type];
 
 			switch (type) {
 				case "Float32":
@@ -424,10 +446,14 @@ function compileDataView(input) {
 					break;
 
 				case "char":
+				case "String":
 					flushBitfields();
 
 					if (undefined !== bitCount)
 						throw new Error(`char cannot use bitfield`);
+
+					if (("String" === type) && (undefined == arrayCount))
+						throw new Error(`String requires array count`);
 
 					if (doGet) {
 						output.push(`   get ${name}() {`);
