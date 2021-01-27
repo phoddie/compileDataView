@@ -55,6 +55,7 @@ let pack;
 let extendsClass;
 let xs;
 let byteLength;
+let union;
 
 const hex = "0123456789ABCDEF";
 function toHex(value, byteCount = 4) {
@@ -75,6 +76,13 @@ function booleanSetting(value, name) {
 		return false;
 
 	throw new Error(`invalid ${name} "${value}" specified`);
+}
+
+function endField(byteCount) {
+	if (undefined !== union)
+		union = Math.max(byteCount, union);
+	else
+		byteOffset += byteCount;
 }
 
 function flushBitfields(bitsToAdd = 32) {
@@ -134,11 +142,12 @@ function flushBitfields(bitsToAdd = 32) {
 	}
 
 	bitfields.length = 0;
-	byteOffset += byteCount;
+
+	endField(byteCount);
 }
 
 function compileDataView(input) {
-	className = "CompiledDataView";
+	className = undefined;
 	output = [];
 	properties = [];
 	classes = {};
@@ -153,71 +162,131 @@ function compileDataView(input) {
 	extendsClass = "DataView";
 	xs = true;
 	byteLength = false;
+	union = undefined;
 
 	let final = [];
 	const errors = [];
 
 	const lines = input.split("\n");
-	lines.push("EOF: 0;");
 
 	for (; lines.length; lineNumber += 1) {
 		const originalLine = lines.shift().trimStart().trimEnd();
 
 		try {
 			let bitCount, byteCount, arrayCount;
-			let line = originalLine;
+			let line = originalLine.replaceAll("\t", " ");
 			if (!line)
 				continue;
 
 			if (line.startsWith("//"))
 				continue;
 
-			let colon = line.indexOf(":");
-			let space = line.indexOf(" ");
+			if (line.startsWith("}")) {
+				if (!className)
+					throw new Error(`unexpected }`);
 
-			if ((colon > 0) && (colon < space)) {
-				const setting = line.slice(0, colon);
-				const semicolon = line.indexOf(";", colon);
-				if (semicolon < 0)
-					throw new Error(`semicolon expected`);
-				let value = line.slice(colon + 1, semicolon).trimStart().trimEnd();
+				flushBitfields();
+
+				if (undefined !== union) {
+					if (0 === union)
+						throw new Error(`empty union`);
+
+					const byteLength = union;
+					union = undefined;
+
+					endField(byteLength);
+					continue;
+				}
+
+				if (!byteOffset)
+					throw new Error(`empty struct`);
+
+				output.push(`}`);
+				output.push(``);
+
+				const start = [];
+				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
+				if (byteLength) {
+					start.push(`   static byteLength = ${byteOffset};`);
+					start.push(``);
+				}
+				start.push(`   constructor(data, offset) {`);
+				start.push(`      if (data)`);
+				start.push(`         super(data, offset ?? 0, ${byteOffset});`);
+				start.push(`       else`);
+				start.push(`         super(new ArrayBuffer(${byteOffset}));`);
+				start.push(`   }`);
+
+				final = final.concat(start, output);
+
+				classes[className] = {
+					byteLength: byteOffset
+				};
+
+				output.length = 0;
+				byteOffset = 0;
+				properties.length = 0;
+				className = undefined;
+
+				continue;
+			}
+
+			if (line.startsWith("union")) {
+				line = line.slice(5).trimStart();
+
+				if (!line.startsWith("{"))
+					throw new Error(`invalid union`);
+
+				if (!className)
+					throw new Error(`union must be in struct`);
+
+				if (undefined !== union)
+					throw new Error(`no nested unions`);
+
+				union = 0;
+				continue;
+			}
+
+			if (line.startsWith("struct ")) {
+				if (className)
+					throw new Error(`cannot nest structure"`);
+
+				line = line.slice(7).trimStart();
+				let brace = line.indexOf("{");
+				if (brace < 0)
+					throw new Error(`open brace expected`);
+
+				let value = line.slice(0, brace).trimStart().trimEnd();
+				if (!value)
+					throw new Error(`name expected`);
+
+				className = value;
+				if (classes[className])
+					throw new Error(`duplicate class "${className}"`);
+
+				continue;
+			}
+
+			if (line.startsWith("#pragma ")) {
+				line = line.slice(8).trimStart();
+
+				let parenL = line.indexOf("(");
+				if (parenL < 0)
+					throw new Error(`open parenthesis expected`);
+
+				let parenR = line.indexOf(")", parenL);
+				if (parenR < 0)
+					throw new Error(`close parenthesis expected`);
+
+				let setting = line.slice(0, parenL).trimStart().trimEnd();
+				if (!setting)
+					throw new Error(`pragma name expected`);
+
+				let value = line.slice(parenL + 1, parenR).trimStart().trimEnd();
+				if (!value)
+					throw new Error(`pragma value expected`);
+
 				switch (setting) {
-					case "class":
-					case "EOF":
-						flushBitfields();
-						if (byteOffset) {
-							output.push(`}`);
-							output.push(``);
-
-							const start = [];
-							start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
-							if (byteLength) {
-								start.push(`   static byteLength = ${byteOffset};`);
-								start.push(``);
-							}
-							start.push(`   constructor(data, offset) {`);
-							start.push(`      if (data)`);
-							start.push(`         super(data, offset ?? 0, ${byteOffset});`);
-							start.push(`       else`);
-							start.push(`         super(new ArrayBuffer(${byteOffset}));`);
-							start.push(`   }`);
-
-							final = final.concat(start, output);
-
-							classes[className] = {
-								byteLength: byteOffset
-							};
-
-							output.length = 0;
-							byteOffset = 0;
-							properties.length = 0;
-						}
-
-						className = value;
-						if (classes[className])
-							throw new Error(`duplicate class "${className}"`);
-						break;
-
 					case "extends":
 						extendsClass = value;
 						break;
@@ -256,12 +325,17 @@ function compileDataView(input) {
 						break;
 
 					default:
-						throw new Error(`unknown setting "${setting}"`);
+						throw new Error(`unknown pragma "${setting}"`);
 						break;
 				}
+
 				continue;
 			}
 
+			if (line.startsWith("#"))
+				throw new Error(`invalid preprocessor instruction"`);
+
+			let space = line.indexOf(" ");
 			if (space < 0)
 				throw new Error(`space expected`);
 			const type = line.slice(0, space);
@@ -272,7 +346,7 @@ function compileDataView(input) {
 				throw new Error(`semicolon expected`);
 			let name = line.slice(0, semicolon);
 
-			colon = name.indexOf(":");
+			const colon = name.indexOf(":");
 			if (colon > 0) {
 				bitCount = parseInt(name.slice(colon + 1));
 				if ((bitCount <= 0) || (bitCount > 32) || isNaN(bitCount))
@@ -314,7 +388,7 @@ function compileDataView(input) {
 					const byteCount = byteCounts[type];
 
 					if (!pack && (byteOffset % byteCount))
-						byteOffset += byteCount - (byteOffset % byteCount);
+						endField(byteCount - (byteOffset % byteCount));
 
 					if (doGet) {
 						output.push(`   get ${name}() {`);
@@ -346,7 +420,7 @@ function compileDataView(input) {
 						output.push(`   }`);
 					}
 
-					byteOffset += (arrayCount ?? 1) * byteCount;
+					endField((arrayCount ?? 1) * byteCount);
 					break;
 
 				case "char":
@@ -388,7 +462,7 @@ function compileDataView(input) {
 						output.push(`   }`);
 					}
 
-					byteOffset += arrayCount ?? 1;
+					endField(arrayCount ?? 1);
 					break;
 
 				case "Uint":
@@ -444,7 +518,7 @@ function compileDataView(input) {
 						output.push(`   }`);
 					}
 
-					byteOffset += classes[type].byteLength;
+					endField(classes[type].byteLength);
 					break;
 			}
 		}
@@ -452,6 +526,9 @@ function compileDataView(input) {
 			errors.push(`   ${e}, line ${lineNumber}: ${originalLine}`);
 		}
 	}
+
+	if (className)
+		errors.push(`   incomplete struct at end of file`);
 
 	final.push("/*");
 	final.push("");
