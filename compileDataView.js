@@ -350,6 +350,9 @@ function compileDataView(input) {
 			if (line.startsWith("#"))
 				throw new Error(`invalid preprocessor instruction"`);
 
+			if (!className)
+				throw new Error(`unexpected"`);
+
 			let space = line.indexOf(" ");
 			if (space < 0)
 				throw new Error(`space expected`);
