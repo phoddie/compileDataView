@@ -2,7 +2,7 @@
 
 Copyright 2021 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: January 25, 2021
+Revised: January 27, 2021
 
 ## Introduction
 CompileDataView makes it easier to work with binary data structures in JavaScript. There are two big motivations to use binary data in JavaScript:
@@ -10,46 +10,43 @@ CompileDataView makes it easier to work with binary data structures in JavaScrip
 - To interoperate with existing binary data, for example to exchange binary data over a network or serial connection and to read and write a binary file format. Both of these scenarios are common for JavaScript code written for embedded systems.
 - To reduce memory required for records by storing property values in a compact binary form rather than as dynamically typed JavaScript values. Memory is particularly precious on resource constrained devices.
 
+CompileDataView is designed to be easy to adopt by developers familiar with the C programming language. Both the syntax used to define binary data structures and the JavaScript code used to work with binary data structures are similar to C. C is used as a model because many binary data structures are already defined in C and many developers working in JavaScript on embedded systems already know C.
+
 ### Example
-The introduction of [DataView](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView) to JavaScript in ES6 made it possible to read and write binary records, but not pleasant. Using CompileDataView, this C data structure:
+The introduction of [DataView](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView) to JavaScript in ES6 made it possible to read and write binary records, but not pleasant. CompileDataView addresses this by allowing binary data structures to be described using a C-like syntax which is compiled to JavaScript classes. Script read and write values to the data structures with code that looks like like the C code operating on the same structure.
+
+Using CompileDataView, this C data structure:
 
 ```c
 struct IntroRecord {
    int32_t a;
    uint8_t b;
    char c;
+   float f;
+   uint16_t data[4];
 };
 ```
 
 can be naturally accessed in JavaScript:
 
-```
+```js
 let i = new IntroView;
 i.a = 0x80001234;
-i.b = 1;
+i.b = 3;
 i.c = "!";
-let d = (i.a + i.b) + i.c;
+i.f = i.a / i.b;
+i.data[2] = 11;
 ```
 
-To create views like `IntroView`, you provide CompileDataView with description of the binary data structure using a C-like syntax. It generates JavaScript code to implement your data structure. This is the description for the example above:
-
-```
-class: IntroView;
-
-Int32 a;
-Uint8 b;
-char c;
-```
-
-This is the generated class:
+To create views like `IntroView`, you provide CompileDataView with description of the binary data structure using a C-like syntax. It generates JavaScript code to implement your data structure. For this example, the description is simply the C `struct` declaration above which generates the following JavaScript:
 
 ```js
-export class IntroView extends DataView {
+export class IntroRecord extends DataView {
    constructor(data, offset) {
       if (data)
-         super(data, offset ?? 0, 6);
+         super(data, offset ?? 0, 18);
        else
-         super(new ArrayBuffer(6));
+         super(new ArrayBuffer(18));
    }
    get a() {
       return this.getInt32(0, true);
@@ -69,6 +66,19 @@ export class IntroView extends DataView {
    set c(value) {
       return this.setUint8(5, value.charCodeAt());
    }
+   get f() {
+      return this.getFloat32(6, true);
+   }
+   set f(value) {
+      this.setFloat32(6, value, true);
+   }
+   get data() {
+      return new Uint16Array(this.buffer, this.byteOffset + 10, 8);
+   }
+   set data(value) {
+      for (let i = 0, j = 10; i < 4; i++, j += 2)
+         this.setUint16(j, value[i]);
+   }
 }
 ```
 
@@ -84,7 +94,7 @@ CompileDataView is [implemented](https://github.com/phoddie/compileDataView/blob
 Any errors detected in the input file are displayed in a comment at the top of the generated source code. CompileDataView does not stop on the first error found, so  more than one error reported may be reported.
 
 ### Adding the generated classes to your Moddable SDK project
-The source code CompileDataView  generates is intended to be used as a JavaScript module. The generated code may be used with any modern JavaScript engine.
+The source code CompileDataView generates is intended to be used as a JavaScript module. The generated code may be used with any modern JavaScript engine.
 
 If you are working with the Moddable SDK, here are the steps for adding the generated classes to your project as a module.
 
@@ -144,53 +154,64 @@ file.write(record.buffer);
 ```
 
 ## Reference
-This section is explains the the binary data format description used by CompileDataView.
+This section is explains the the binary data format description used by CompileDataView. It is very similar to C, though not identical.
 
-### Line-based structure
-CompileDataView recognizes the following kinds of lines:
+### File structure
+A binary data format description contains one or more structures:
 
-- **Property definition**: define one property in the generated view. They begin with the name of a supported type followed by a space and then the property name and a semicolon, such as `Int32 value;`. For an array, the element count follows the property name, `Int32 values[2];` For bitfields, the bit count follows the property name, `Uint oneBit:1;`
-- **Setting**: control the behavior of CompileDataView. They begin with the name of a setting followed by a colon, then then property value, and finally a semicolon, such as `class: Example;`.
-- **Comment**: ignored. These lines begin with `//`.
-
-Empty lines are ignored.
-
-A comment, starting with `//`, may appear after the semicolon on property definition and setting lines.
-
-### Settings
-Settings control how CompileDataView generates code for properties. All settings are optional. The defaults are designed to be reasonable and safe for use on embedded systems.
-
-Setting can be changed in mid-file. For example, changing the `endian` setting, which controls how multi-byte numbers are stored, allows CompileDataView to support obscure data structures that have both big-endian and little-endian values.
-
-#### `class`
-The `class` setting defines the name of the generated class. The default value is `CompiledDataView`. For example, the following setting
-
-```
-class: ExampleView;
+```c
+struct A {
+	uint8_t a;
+}
+struct B {
+	uint32_t b;
+}
 ```
 
-generates the following class declaration:
+Arrays and bitfields are supported. Unlike C, Bitfields are always unsigned and must be use the type `Uint`:
 
-```js
-class ExampleView extends DataView {
-...
+```c
+struct C {
+	int16_t c[4];
+
+	Uint c1:4;
+	Uint c2:2;
+}
 ```
 
-The `class` setting may be used to define more than one class in a single description. If the `class` setting appears after any properties have been declared, it causes the current class to be output and a new class to new started with the name specified. The following outputs two classes, `AView` and `BView`:
+Anonymous unions may be embedded in a `struct`:
 
+```c
+struct D {
+	uint8_t kind;
+	union {
+		A a;
+		B b;
+		C c;
+	}
+}
 ```
-class AView
-Uint32 a;
 
-class BView
-Uint16 b;
+Comments begin with `//`. Empty lines are ignored.
+
+The behavior of CompileDataView is controlled using pragmas. For example, use the `endian` pragma to store  multi-byte numbers as big-endian values:
+
+```c
+#pragma endian(big)
 ```
+
+> **Note**: The parser in CompileDataView is far from a full C compiler and supports only a small subset of the C language. In particular, multiple statements cannot appear on a single line.
+
+### Configuring CompileDataView
+Pragmas control how CompileDataView generates code for properties. All pragmas are optional. The defaults are designed to be reasonable and safe for use on embedded systems.
+
+Pragmas can be changed in mid-file. For example, changing the `endian` pragma, which controls how multi-byte numbers are stored, allows CompileDataView to support obscure data structures that have both big-endian and little-endian values.
 
 #### `extends`
-The `extends` setting defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following setting
+The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
 
 ```
-extends: CustomDataView;
+#pragma extends(CustomDataView)
 ```
 
 generates the following class declaration:
@@ -201,7 +222,7 @@ class CompiledDataView extends CustomDataView {
 ```
 
 #### `export`
-The `export` setting determines whether the classes generated by CompileDataView are exported. The default is `true` which means the classes are exported. This setting is useful if the generated code will be included in a module for use by other modules.
+The `export` pragma determines whether the classes generated by CompileDataView are exported. The default is `true` which means the classes are exported. This pragma is useful when the generated code will be included in a module for use by other modules.
 
 ```js
 export class CompiledDataView extends DataView {
@@ -209,36 +230,38 @@ export class CompiledDataView extends DataView {
 ```
 
 #### `get` and `set`
-The `get` and `set` settings control whether the generated class contains getters and/or setters for the defined properties. Both default to `true` which causes both getters and setters to be generated.
+The `get` and `set` pragmas control whether the generated class contains getters and/or setters for the defined properties. Both default to `true` which causes both getters and setters to be generated.
 
 Excluding getters or setters generates less code and has no performance impact. This is useful when you know a particular data structure is only used for reading or writing.
 
 #### `endian`
-The `endian` setting controls how multi-byte numeric values are stored. The default is `"little"` for little-endian values. For big-endian values, use `"big"`. Views that are used to only reduce the memory required for properties should not change the `endian` setting from the default.
+The `endian` pragma controls how multi-byte numeric values are stored. The default is `"little"` for little-endian values. For big-endian values, use `"big"`. Views that are used to only reduce the memory required for properties should not change the `endian` pragma from the default.
 
-The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`.  The `endian` setting also controls the endianness of multi-byte integers that store bitfields.
+The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`.  The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
 
 #### `pack`
-The `pack` setting controls the alignment of multi-byte numeric values. The default is `true` which causes values to be organized sequentially without any unused bytes between them. When `pack` is set to `false`, two-byte integers are forced to an even offset; four- and eight-byte integers are forced to a four-byte alignment.
+The `pack` pragma controls the alignment of multi-byte numeric values. The default is `true` which causes values to be organized sequentially without any unused bytes between them. When `pack` is set to `false`, two-byte integers are forced to an even offset; four- and eight-byte integers are forced to a four-byte alignment.
 
 Views that are used only to reduce the memory required for properties should use the default value of `true`. The alignment option is provided to match the behavior of `struct` definitions in C to ease interoperation with native code.
 
 Consider the following data view description:
 
-```
-pack: true;
-get: false;
+```c
+#pragma pack(true)
+#pragma get(false)
 
-Uint8 a;
-Uint16 b;
-Uint8 c;
-Uint32 d;
+struct Pack {
+	Uint8 a;
+	Uint16 b;
+	Uint8 c;
+	Uint32 d;
+}
 ```
 
 The code generated uses eight bytes to store the properties:
 
 ```js
-class CompiledDataView extends DataView {
+export class Pack extends DataView {
    constructor(data, offset) {
       if (data)
          super(data, offset ?? 0, 8);
@@ -260,10 +283,10 @@ class CompiledDataView extends DataView {
 }
 ```
 
-If the `pack` setting is changed to `false`, the data structure uses twelve bytes of memory.
+If the `pack` pragma is changed to `false`, the data structure uses twelve bytes of memory.
 
 ```js
-class CompiledDataView extends DataView {
+export class Pack extends DataView {
    constructor(data, offset) {
       if (data)
          super(data, offset ?? 0, 12);
@@ -291,30 +314,43 @@ The `xs` property controls whether CompileDataView generates code targeting the 
 At this time there is no option to generate code for strings that works for both XS and the web platform, though it is possible.
 
 #### `byteLength`
-The `byteLength` setting controls whether CompileDataView includes a static `byteLength` property in the generated class with the number of bytes used by the native data structure. Defaults to `false`.
+The `byteLength` pragma controls whether CompileDataView includes a static `byteLength` property in the generated class with the number of bytes used by the native data structure. Defaults to `false`.
 
 ### Property types
 CompileDataView supports all the types of values provided by `DataView` and adds support for smaller integers using bitfields, arrays of numbers, booleans, characters, and strings.
 
 #### Numbers
-The numeric types defined by `DataView` are all available: `Int8`, `Int16`, `Int32`, `Uint8`, `Uint16`, `Uint32`, `BigInt64`, `BigUint64`, and `Float32`, `Float64`.
+All the numeric types defined by `DataView` are available: `Int8`, `Int16`, `Int32`, `Uint8`, `Uint16`, `Uint32`, `BigInt64`, `BigUint64`, `Float32`, and `Float64`.
 
-```
-Int16 value;
-Float32 single;
-Float64 double;
+To match the C language, `DataView` numeric types are also available using standard  C type names: `int8_t`, `int16_t`, `int32_t`, `uint8_t`, `uint16_t`, `uint32_t`, `int64_t`, `uint64_t`, `float`, and `double`.
+
+
+```c
+struct Example {
+	Int16 a;
+	int16_t b;
+	
+	Float32 c;
+	float d;
+	
+	double e;
+	Float64 f;
+}
 ```
 
 #### Arrays of numbers
 Fixed length arrays of numeric types are supported. For example, the following defines a four element array of `Int16`:
 
-```
-Int16 values[4];
+```c
+struct ArrayExample {
+	Int16 values[4];
+}
 ```
 
 Array are properties may be set full arrays:
 
 ```js
+let i = new ArrayExample;
 i.values = Int16Array.of(1, 2, 3, 4);
 i.values = [1, 2, 3, 4];
 ```
@@ -331,7 +367,7 @@ Reading an array property returns a reference to the data as the corresponding T
 i.values.fill(0xff);
 ```
 
-> Note: Each get of a numeric array property creates new TypedArray instance. Where practical, code should be written to re-use the TypedArray instance.
+Each get of a numeric array property creates new TypedArray instance. Where performance is a priority, code should be written to re-use the TypedArray instance.
 
 ```js
 for (let j = 0, values = i.values; j < 4; j++)
@@ -343,10 +379,12 @@ Numeric bitfields are unsigned integer values of 1 to 31 bits. CompileDataView m
 
 Numeric bitfields are declared using the `Uint` type and adopting C-style bitfield declarations:
 
-```
-Uint oneBit:1;
-Uint nybble:4;
-Uint mask:3;
+```c
+struct BitFields {
+	Uint oneBit:1;
+	Uint nybble:4;
+	Uint mask:3;
+}
 ```
 
 This declaration uses only one byte of storage.
@@ -356,8 +394,12 @@ Bitfields and arrays are mutually exclusive: you cannot have an array of `Uint` 
 #### Boolean
 Boolean values allow JavaScript `true` and `false` values to be stored in a `DataView`. Boolean values are treated as a bitfield with a size of one bit. When setting the property, a truthy value is 1; when reading, the return values are `true` and `false`.
 
-```
-Boolean on;
+```c
+struct Booleans {
+	Boolean a;
+	boolean b
+	bool c;
+}
 ```
 
 Because Booleans are implemented as bitfields, arrays of Booleans are not supported.
@@ -365,8 +407,10 @@ Because Booleans are implemented as bitfields, arrays of Booleans are not suppor
 #### Characters
 JavaScript does not have a data type for a single character but because the `char` type is common in C, CompileDataView supports it:
 
-```
-char c;
+```c
+struct Character {
+	char c;
+}
 ```
 
 The `char` type uses one byte of storage, a `Uint8` type. If the character value to be stored is greater than 255, only the low eight bits are stored. To set a character property, pass a string. The first character is stored.
@@ -380,8 +424,10 @@ The result of reading a `char` a one character string, not an integer as in C.
 #### Strings
 CompileDataView supports strings using an array of `char`. The following declares a string of 8 bytes:
 
-```
-char str[8];
+```c
+struct StringExample {
+	char str[8];
+}
 ```
 
 Note that this is 8 bytes, not 8 JavaScript Unicode characters. Strings are stored in UTF-8 format.
@@ -389,6 +435,7 @@ Note that this is 8 bytes, not 8 JavaScript Unicode characters. Strings are stor
 You may set strings values shorter than the declared length, but not longer.
 
 ```js
+let i = new StringExample;
 i.str = "12345678"; // ok
 i.str = "12"; // ok
 i.str = "123456789"; // throws
@@ -397,14 +444,16 @@ i.str = "123456789"; // throws
 #### Embedded Types
 View declared in a description can be embedded in views that follow it by using the class name as the type.
 
-```
-class: Point;
-Uint16 x;
-Uint16 y;
+```c
+struct Point {
+	uint16_t x;
+	uint16_t y;
+}
 
-class: Rectangle;
-Point topLeft;
-Point bottomRight;
+struct Rectangle {
+	Point topLeft;
+	Point bottomRight;
+}
 ```
 
 The generated classes may be used by scripts.
@@ -431,10 +480,17 @@ There are some other libraries with a similar goal of simplifying access to nati
 
 As a quick project, CompileDataView is a little rough. I know little about writing parsers and less about building web pages. The parser is adequate, but the [web page](https://phoddie.github.io/compileDataView/) could really use some help (hint, hint).
 
-CompileDataView is useful as-is. There are areas that could be explored further.
+While CompileDataView is useful today, there are areas that could be explored further.
  
 - **Initializers**: In some data structures, some properties should be initialized to a non-zero value. This could be done with the syntax `Int8 foo = 1;` with the assignment applied in the constructor.
 - **ASCII strings**: The `string` type stores UTF-8 which is useful, but 8-bit character data is common enough in many binary formats that it makes sense to support directly.
 - **Date**: It might be useful to allow `Date` objects to be stored directly, as  Booleans are.
+- **Code generation**: The code for copying structures and strings could be optimized based on the size of the copy.
 
+## Acknowledgements
+The motivation for creating CompileDataView was code kindly shared in the [Embedded JavaScript Gitter](https://gitter.im/embedded-javascript/moddable) by an embedded developer ([@SkyeSweeney](https://github.com/SkyeSweeney)) writing their first JavaScript code.
+
+The original syntax of the binary data descriptions was unnecessary complex. Thanks to Patrick Soquet for encouraging me to follow the C model more closely.
+
+## Contact
 If you run into an issue or have question, please post it to the [CompileDataView repository](https://github.com/phoddie/compileDataView). You can also reach me on Twitter at [@phoddie](https://twitter.com/phoddie). Pull requests with improvements are welcome.
