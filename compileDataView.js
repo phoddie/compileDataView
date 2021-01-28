@@ -53,7 +53,7 @@ const TypeAliases = {
 	double:  "Float64",
 	boolean: "Boolean",
 	bool: "Boolean"
-}
+};
 
 let className;
 let output;
@@ -69,7 +69,8 @@ let doExport;
 let pack;
 let extendsClass;
 let xs;
-let byteLength;
+let outputByteLength;
+let checkByteLength;
 let union;
 
 const hex = "0123456789ABCDEF";
@@ -176,7 +177,8 @@ function compileDataView(input) {
 	pack = true;
 	extendsClass = "DataView";
 	xs = true;
-	byteLength = false;
+	outputByteLength = false;
+	checkByteLength = true;
 	union = undefined;
 
 	let final = [];
@@ -221,13 +223,15 @@ function compileDataView(input) {
 
 				const start = [];
 				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
-				if (byteLength) {
+				if (outputByteLength) {
 					start.push(`   static byteLength = ${byteOffset};`);
 					start.push(``);
 				}
+
+				const limit = checkByteLength ? `, ${byteOffset}` : "";
 				start.push(`   constructor(data, offset) {`);
 				start.push(`      if (data)`);
-				start.push(`         super(data, offset ?? 0, ${byteOffset});`);
+				start.push(`         super(data, offset ?? 0${limit});`);
 				start.push(`       else`);
 				start.push(`         super(new ArrayBuffer(${byteOffset}));`);
 				start.push(`   }`);
@@ -335,8 +339,12 @@ function compileDataView(input) {
 						doExport = booleanSetting(value, setting);
 						break;
 
-					case "byteLength":
-						byteLength = booleanSetting(value, setting);
+					case "outputByteLength":
+						outputByteLength = booleanSetting(value, setting);
+						break;
+
+					case "checkByteLength":
+						checkByteLength = booleanSetting(value, setting);
 						break;
 
 					default:

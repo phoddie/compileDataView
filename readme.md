@@ -315,8 +315,11 @@ The `xs` property controls whether CompileDataView generates code targeting the 
 
 At this time there is no option to generate code for strings that works for both XS and the web platform, though it is possible.
 
-#### `byteLength`
-The `byteLength` pragma controls whether CompileDataView includes a static `byteLength` property in the generated class with the number of bytes used by the native data structure. Defaults to `false`.
+#### `outputByteLength`
+The `outputByteLength` pragma controls whether CompileDataView includes a static `byteLength` property in the generated class with the number of bytes used by the native data structure. Defaults to `false`.
+
+#### `checkByteLength`
+The `checkByteLength ` pragma controls whether CompileDataView generates code to confirm that an ArrayBuffer passed to a view constructor is at least as big as the view. Defaults to `true` so the length is checked. Setting this value to `false` is useful for variable views that end with a union. Note that even if the length is not checked, JavaScript guarantees you cannot read or write beyond the end of allocated memory.
 
 ### Property types
 CompileDataView supports all the types of values provided by `DataView` and adds support for smaller integers using bitfields, arrays of numbers, booleans, characters, and strings.
