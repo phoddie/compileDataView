@@ -540,7 +540,7 @@ function compileDataView(input) {
 
 					if (doGet) {
 						output.push(`   get ${name}() {`);
-							output.push(`      return new ${type}(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${classes[type].byteLength});`);
+						output.push(`      return new ${type}(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""});`);
 						output.push(`   }`);
 					}
 
