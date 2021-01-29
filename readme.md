@@ -2,7 +2,7 @@
 
 Copyright 2021 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: January 27, 2021
+Revised: January 29, 2021
 
 ## Introduction
 CompileDataView makes it easier to work with binary data structures in JavaScript. There are two big motivations to use binary data in JavaScript:
@@ -164,10 +164,10 @@ A binary data format description contains one or more structures:
 ```c
 struct A {
 	uint8_t a;
-}
+};
 struct B {
 	uint32_t b;
-}
+};
 ```
 
 Arrays and bitfields are supported. Unlike C, Bitfields are always unsigned and must be use the type `Uint`:
@@ -178,7 +178,7 @@ struct C {
 
 	Uint c1:4;
 	Uint c2:2;
-}
+};
 ```
 
 Anonymous unions may be embedded in a `struct`:
@@ -190,8 +190,8 @@ struct D {
 		A a;
 		B b;
 		C c;
-	}
-}
+	};
+};
 ```
 
 Comments begin with `//` and extend to the end of the line. Empty lines are ignored.
@@ -202,7 +202,7 @@ The behavior of CompileDataView is controlled using pragmas. For example, use th
 #pragma endian(big)
 ```
 
-> **Note**: The parser in CompileDataView is far from a full C compiler and supports only a small subset of the C language. In particular, multiple statements cannot appear on a single line.
+> **Note**: The parser in CompileDataView is far from a full C compiler and supports only a small subset of the C language. It is intended to be familiar to C programmers but not to support all C `struct` declarations.
 
 ### Configuring CompileDataView
 Pragmas control how CompileDataView generates code for properties. All pragmas are optional. The defaults are designed to be reasonable and safe for use on embedded systems.
@@ -242,14 +242,14 @@ The `endian` pragma controls how multi-byte numeric values are stored. The defau
 The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`. The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
 
 #### `pack`
-The `pack` pragma controls the alignment of multi-byte numeric values. The default is `true` which causes values to be organized sequentially without any unused bytes between them. When `pack` is set to `false`, two-byte integers are forced to an even offset; four- and eight-byte integers are forced to a four-byte alignment.
+The `pack` pragma controls the alignment of multi-byte numeric values. The default is `1` which causes values to be organized sequentially without any unused bytes between them. Supported values are `1`, `2`, `4`, `8`, and `16`.
 
-Views that are used only to reduce the memory required for properties should use the default value of `true`. The alignment option is provided to match the behavior of `struct` definitions in C to ease interoperation with native code.
+Views that are used only to reduce the memory required for properties should use the default value of `1`. The alignment option is provided to match the behavior of `struct` definitions in C to ease interoperation with native code.
 
 Consider the following data view description:
 
 ```c
-#pragma pack(true)
+#pragma pack(1)
 #pragma get(false)
 
 struct Pack {
@@ -257,7 +257,7 @@ struct Pack {
 	Uint16 b;
 	Uint8 c;
 	Uint32 d;
-}
+};
 ```
 
 The code generated uses eight bytes to store the properties:
@@ -285,7 +285,7 @@ export class Pack extends DataView {
 }
 ```
 
-If the `pack` pragma is changed to `false`, the data structure uses twelve bytes of memory.
+If the `pack` pragma is changed to `4`, the data structure uses twelve bytes of memory.
 
 ```js
 export class Pack extends DataView {
@@ -339,7 +339,7 @@ struct Example {
 	
 	double e;
 	Float64 f;
-}
+};
 ```
 
 #### Arrays of numbers
@@ -348,7 +348,7 @@ Fixed length arrays of numeric types are supported. For example, the following d
 ```c
 struct ArrayExample {
 	Int16 values[4];
-}
+};
 ```
 
 Array are properties may be set full arrays:
@@ -388,7 +388,7 @@ struct BitFields {
 	Uint oneBit:1;
 	Uint nybble:4;
 	Uint mask:3;
-}
+};
 ```
 
 This declaration uses only one byte of storage.
@@ -403,7 +403,7 @@ struct Booleans {
 	Boolean a;
 	boolean b
 	bool c;
-}
+};
 ```
 
 Because Booleans are implemented as bitfields, arrays of Booleans are not supported.
@@ -414,7 +414,7 @@ JavaScript does not have a data type for a single character but because the `cha
 ```c
 struct Character {
 	char c;
-}
+};
 ```
 
 The `char` type uses one byte of storage, a `Uint8` type. If the character value to be stored is greater than 255, only the low eight bits are stored. To set a character property, pass a string. The first character is stored.
@@ -431,7 +431,7 @@ CompileDataView supports strings using an array of `char`. The following declare
 ```c
 struct StringExample {
 	char str[8];
-}
+};
 ```
 
 Note that this is 8 bytes, not 8 JavaScript Unicode characters. Strings are stored in UTF-8 format.
@@ -452,12 +452,12 @@ View declared in a description can be embedded in views that follow it by using 
 struct Point {
 	uint16_t x;
 	uint16_t y;
-}
+};
 
 struct Rectangle {
 	Point topLeft;
 	Point bottomRight;
-}
+};
 ```
 
 The generated classes may be used by scripts.

@@ -55,6 +55,8 @@ const TypeAliases = {
 	bool: "Boolean"
 };
 
+const isTypedef = Symbol("typedef");
+
 let className;
 let output;
 let classes;
@@ -72,6 +74,8 @@ let xs;
 let outputByteLength;
 let checkByteLength;
 let union;
+let classAlign;
+let anonymousUnion;
 
 const hex = "0123456789ABCDEF";
 function toHex(value, byteCount = 4) {
@@ -99,6 +103,81 @@ function endField(byteCount) {
 		union = Math.max(byteCount, union);
 	else
 		byteOffset += byteCount;
+}
+
+function validateName(name) {
+	//@@ naive
+	if (name.includes(";") || name.includes("+")  || name.includes("-") || name.includes(".") || name.includes("&"))
+		throw new Error(`invalid name "${name}"`);
+
+	return name;
+}
+
+function splitSource(source) {
+	let parts = [], part = "";
+	let map = [];
+	let line = 1;
+
+splitLoop:
+	for (let i = 0, length = source.length; i < length; i++) {
+		const c = source[i]
+
+		switch (c) {
+			case "{":
+			case "}":
+			case ":":
+			case ";":
+			case "[":
+			case "]":
+			case "(":
+			case ")":
+				if (part) {
+					parts.push(part);
+					map.push(line);
+				}
+				parts.push(c);
+				map.push(line);
+				part = "";
+				break;
+
+			case "\n":
+			case "\t":
+			case " ":
+				if (part) {
+					parts.push(part);
+					map.push(line);
+				}
+
+				if ("\n" === c)
+					line += 1;
+
+				part = "";
+				break;
+
+			case "/":
+				if ("/" === part) {
+					part = "";
+					i = source.indexOf("\n", i);
+					if (i < 0)
+						break splitLoop;
+					i -= 1;		// so line ending is parsed
+					continue splitLoop;
+				}
+				part += c;
+				break;
+
+			default:
+				part += c;
+				break;
+		}
+	}
+
+	if (part) {
+		parts.push(part);
+		map.push(line);
+	}
+
+	return {parts, map};
 }
 
 function flushBitfields(bitsToAdd = 32) {
@@ -174,31 +253,29 @@ function compileDataView(input) {
 	doSet = true;
 	doGet = true;
 	doExport = true;
-	pack = true;
+	pack = 1;
 	extendsClass = "DataView";
 	xs = true;
 	outputByteLength = false;
 	checkByteLength = true;
 	union = undefined;
+	classAlign = 0;
+	anonymousUnion = false;
 
 	let final = [];
 	const errors = [];
-
 	const lines = input.split("\n");
 
-	for (; lines.length; lineNumber += 1) {
-		const originalLine = lines.shift().trimStart().trimEnd();
+	const {parts, map} = splitSource(input);
+	for (let pos = 0; pos < parts.length; ) {
+		const part = parts[pos++];
+		if (!part)
+			debugger;
 
 		try {
 			let bitCount, byteCount, arrayCount;
-			let line = originalLine.replaceAll("\t", " ");
-			if (!line)
-				continue;
 
-			if (line.startsWith("//"))
-				continue;
-
-			if (line.startsWith("}")) {
+			if ("}" == part) {
 				if (!className)
 					throw new Error(`unexpected }`);
 
@@ -212,11 +289,27 @@ function compileDataView(input) {
 					union = undefined;
 
 					endField(byteLength);
-					continue;
+					if (anonymousUnion) {
+						anonymousUnion = false;
+
+						if (";" !== parts[pos++])
+							throw new Error(`expected semicolon`);
+
+						continue;
+					}
 				}
 
 				if (!byteOffset)
 					throw new Error(`empty struct`);
+
+				if (isTypedef === className) {
+					className = validateName(parts[pos++]);
+					if (classes[className])
+						throw new Error(`duplicate class "${className}"`);
+				}
+
+				if (";" !== parts[pos++])
+					throw new Error(`expected semicolon`);
 
 				output.push(`}`);
 				output.push(``);
@@ -239,71 +332,84 @@ function compileDataView(input) {
 				final = final.concat(start, output);
 
 				classes[className] = {
-					byteLength: byteOffset
+					byteLength: byteOffset,
+					align: classAlign
 				};
 
 				output.length = 0;
 				byteOffset = 0;
 				properties.length = 0;
 				className = undefined;
+				classAlign = 0;
 
 				continue;
 			}
 
-			if (line.startsWith("union")) {
-				line = line.slice(5).trimStart();
-
-				if (!line.startsWith("{"))
-					throw new Error(`invalid union`);
-
+			if ((part === "union") && ("{" === parts[pos])) {
 				if (!className)
-					throw new Error(`union must be in struct`);
+					throw new Error(`anonymous union must be in struct`);
 
 				if (undefined !== union)
 					throw new Error(`no nested unions`);
 
 				union = 0;
+				anonymousUnion = true;
+
+				pos += 1;
 				continue;
 			}
 
-			if (line.startsWith("struct ")) {
-				if (className)
-					throw new Error(`cannot nest structure"`);
-
-				line = line.slice(7).trimStart();
-				let brace = line.indexOf("{");
-				if (brace < 0)
+			if (part === "union") {
+				if ("{" !== parts[pos + 1])
 					throw new Error(`open brace expected`);
 
-				let value = line.slice(0, brace).trimStart().trimEnd();
-				if (!value)
-					throw new Error(`name expected`);
-
-				className = value;
+				className = validateName(parts[pos]);
 				if (classes[className])
 					throw new Error(`duplicate class "${className}"`);
+				classAlign = pack;
 
+				union = 0;
+				anonymousUnion = false;
+
+				pos += 2;
 				continue;
 			}
 
-			if (line.startsWith("#pragma ")) {
-				line = line.slice(8).trimStart();
+			if (("typedef" === part) && ("struct" === parts[pos])) {
+				if (className)
+					throw new Error(`cannot nest structure`);
 
-				let parenL = line.indexOf("(");
-				if (parenL < 0)
+				if ("{" !== parts[pos + 1])
+					throw new Error(`open brace expected`);
+
+				className = isTypedef;
+				classAlign = pack;
+
+				pos += 2;
+				continue;
+			}
+
+			if ("struct" === part) {
+				if (className)
+					throw new Error(`cannot nest structure`);
+
+				if ("{" !== parts[pos + 1])
+					throw new Error(`open brace expected`);
+
+				className = validateName(parts[pos]);
+				if (classes[className])
+					throw new Error(`duplicate class "${className}"`);
+				classAlign = pack;
+
+				pos += 2;
+				continue;
+			}
+
+			if ("#pragma" === part) {
+				let setting = parts[pos++];
+				if ("(" !== parts[pos++])
 					throw new Error(`open parenthesis expected`);
-
-				let parenR = line.indexOf(")", parenL);
-				if (parenR < 0)
-					throw new Error(`close parenthesis expected`);
-
-				let setting = line.slice(0, parenL).trimStart().trimEnd();
-				if (!setting)
-					throw new Error(`pragma name expected`);
-
-				let value = line.slice(parenL + 1, parenR).trimStart().trimEnd();
-				if (!value)
-					throw new Error(`pragma value expected`);
+				let value = parts[pos++];
 
 				switch (setting) {
 					case "extends":
@@ -320,7 +426,12 @@ function compileDataView(input) {
 						break;
 
 					case "pack":
-						pack = booleanSetting(value, setting);
+						value = parseInt(value);
+						if (0 === value)
+							value = 1;
+						if (![1, 2, 4, 8, 16].includes(value))
+							throw new Error(`invalid pack`);
+						pack = value;
 						break;
 
 					case "xs":
@@ -352,53 +463,49 @@ function compileDataView(input) {
 						break;
 				}
 
+				if (")" !== parts[pos++])
+					throw new Error(`close parenthesis expected`);
+
 				continue;
 			}
 
-			if (line.startsWith("#"))
-				throw new Error(`invalid preprocessor instruction"`);
+			if (part.startsWith("#"))
+				throw new Error(`invalid preprocessor instruction`);
+
+			if (";" === part)
+				continue;
 
 			if (!className)
-				throw new Error(`unexpected"`);
+				throw new Error(`unexpected`);
 
-			let space = line.indexOf(" ");
-			if (space < 0)
-				throw new Error(`space expected`);
-			let type = line.slice(0, space);
-			line = line.slice(space).trimStart();
+			let type = part;
+			let name = validateName(parts[pos++]);
 
-			let semicolon = line.indexOf(";");
-			if (semicolon < 0)
-				throw new Error(`semicolon expected`);
-			let name = line.slice(0, semicolon);
-
-			const colon = name.indexOf(":");
-			if (colon > 0) {
-				bitCount = parseInt(name.slice(colon + 1));
+			if (":" === parts[pos]) {
+				pos++;
+				bitCount = parseInt(parts[pos++]);
 				if ((bitCount <= 0) || (bitCount > 32) || isNaN(bitCount))
 					throw new Error(`invalid bit count`);
-				name = name.slice(0, colon);
 			}
 			else {
-				let leftBrace = name.indexOf("[");
-				if (leftBrace >= 0) {
-					let rightBrace = name.indexOf("]");
-					if (rightBrace < 0)
+				if ("[" == parts[pos]) {
+					if ("]" !== parts[pos + 2])
 						throw new Error(`right brace expected`);
-					arrayCount = parseInt(name.slice(leftBrace + 1, rightBrace));
+
+					arrayCount = parseInt(parts[pos + 1]);
+					pos += 3;
+
 					if ((arrayCount <= 0) || isNaN(arrayCount))
 						throw new Error(`invalid array count`);
-					name = name.slice(0, leftBrace);
 				}
 			}
-			name = name.trimEnd();
-
-			if (name.includes(" "))		//@@ check for other invalid characters
-				throw new Error(`space in name "${name}"`);
 
 			if (properties.includes(name))
 				throw new Error(`duplicate name "${name}"`);
 			properties.push(name);
+
+			if (";" !== parts[pos++])
+				throw new Error(`expected semicolon`);
 
 			if (TypeAliases[type])
 				type = TypeAliases[type];
@@ -413,15 +520,19 @@ function compileDataView(input) {
 				case "Uint16":
 				case "Uint32":
 				case "BigInt64":
-				case "BigUint64":
+				case "BigUint64": {
 					flushBitfields();
 					if (undefined !== bitCount)
 						throw new Error(`cannot use bitfield with "${type}"`);
 
 					const byteCount = byteCounts[type];
 
-					if (!pack && (byteOffset % byteCount))
-						endField(byteCount - (byteOffset % byteCount));
+					const align = Math.min(pack, byteCount);
+					if (byteOffset % align)
+						endField(align - (byteOffset % align));
+
+					if (!classAlign)
+						classAlign = align;
 
 					if (doGet) {
 						output.push(`   get ${name}() {`);
@@ -454,7 +565,7 @@ function compileDataView(input) {
 					}
 
 					endField((arrayCount ?? 1) * byteCount);
-					break;
+					} break;
 
 				case "char":
 					flushBitfields();
@@ -526,7 +637,7 @@ function compileDataView(input) {
 					});
 					break;
 
-				default:
+				default: {
 					if (!classes[type])
 						throw new Error(`unknown type "${type}"`);
 
@@ -537,6 +648,10 @@ function compileDataView(input) {
 
 					if (undefined !== bitCount)
 						throw new Error(`cannot use bitfield with "${type}"`);
+
+					const align = Math.min(pack, classes[type].align);
+					if (byteOffset % align)
+						endField(align - (byteOffset % align));
 
 					if (doGet) {
 						output.push(`   get ${name}() {`);
@@ -552,11 +667,11 @@ function compileDataView(input) {
 					}
 
 					endField(classes[type].byteLength);
-					break;
+					} break;
 			}
 		}
 		catch (e) {
-			errors.push(`   ${e}, line ${lineNumber}: ${originalLine}`);
+			errors.push(`   ${e}, line ${map[pos]}: ${lines[map[pos] - 1]}`);
 		}
 	}
 

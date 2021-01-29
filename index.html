@@ -25,13 +25,13 @@ const defaultDescription =
    int8_t id;
    int16_t origin;
    uint8_t uuid[16];
-}
+};
 
 // char is a one character String
 struct CharacterAndStrings {
    char a;
    char b[15];
-}
+};
 
 // bit-fields stored in integer
 //   of 8, 16, or 32 bits as needed
@@ -46,23 +46,23 @@ struct BooleansAndBitFields {
    Uint grr:4;
    Uint zrr:16;
    Uint yrr:4;
-}
+};
 
 struct FloatAndBigInts {
    float f32;
    double f64[2];
    int64_t big;
    uint64_t bigger[2];
-}
+};
 
 struct EmbedAll {
    Integers i;
    BooleansAndBitFields b;
    CharacterAndStrings c;
    FloatAndBigInts f;
-}
+};
 
-// anonymous unions may be included
+// anonymous union in struct
 struct UnionAll {
    uint8_t kind;
    union {
@@ -71,10 +71,22 @@ struct UnionAll {
       BooleansAndBitFields b;
       CharacterAndStrings c;
       FloatAndBigInts f;
-   }
-}
+   };
+};
 
-// JavaScript type names may be used
+// named union outside struct
+union Ints {
+   uint8_t a;
+   uint16_t b;
+   uint32_t c;
+};
+
+// typedef struct
+typedef struct {
+   float f[2];
+} FloatArray;
+
+// JavaScript type names
 struct JavaScriptTypes {
    Uint8 au;
    Uint16 bu;
@@ -91,7 +103,7 @@ struct JavaScriptTypes {
    BigUint64 b2;
 
    Boolean boo;
-}
+};
 `;
 </script>
 
