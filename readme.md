@@ -2,7 +2,7 @@
 
 Copyright 2021 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: January 29, 2021
+Revised: February 2, 2021
 
 ## Introduction
 CompileDataView makes it easier to work with binary data structures in JavaScript. There are two big motivations to use binary data in JavaScript:
@@ -242,11 +242,11 @@ The `endian` pragma controls how multi-byte numeric values are stored. The defau
 The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`. The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
 
 #### `pack`
-The `pack` pragma controls the alignment of multi-byte numeric values. The default is `1` which causes values to be organized sequentially without any unused bytes between them. Supported values are `1`, `2`, `4`, `8`, and `16`.
+The `pack` pragma controls the alignment of multi-byte numeric values. The default is `16` which causes values to be aligned based on the size the fields they contain. The default is generally compatible with C and safe for all JavaScript operations. Supported values are `1`, `2`, `4`, `8`, and `16`. Passing no argument for pack (`#pragma pack()`) restores the default.
 
-Views that are used only to reduce the memory required for properties should use the default value of `1`. The alignment option is provided to match the behavior of `struct` definitions in C to ease interoperation with native code.
+Views that are used only to reduce the memory required for properties may use the default value of `1` which packs thee fields as tightly as possible.
 
-Consider the following data view description:
+To see how pack works, consider the following data view description:
 
 ```c
 #pragma pack(1)
@@ -310,6 +310,23 @@ export class Pack extends DataView {
 }
 ```
 
+Note that TypedArrays in JavaScript must be aligned to `byteOffset` values that are an integer multiple of their size. Changing `pack` to a value other than the default may result in data structures that generate runtime exceptions. For example, he following declaration puts the `data` Uint32 TypedArray at offset 1.
+
+```c
+#pragma pack(1)
+struct Fail {
+	char c;
+	uint32_t data[4];
+};
+```
+
+When accessed as follows, an exception is generated because the Uint32 TypedArray must be at a `byteOffset` that is a multiple of 4.
+
+```js
+let f = new Fail;
+f.data[1] = 3;
+```
+
 #### `xs`
 The `xs` property controls whether CompileDataView generates code targeting the XS JavaScript engine. The default value is `true`. The only difference in generated code is for string (character array) properties, where CompileDataView uses `String.fromArrayBuffer` and `ArrayBuffer.fromString` in place of `TextDecoder` and `TextEncoder` of the web platform.
 
@@ -320,6 +337,33 @@ The `outputByteLength` pragma controls whether CompileDataView includes a static
 
 #### `checkByteLength`
 The `checkByteLength ` pragma controls whether CompileDataView generates code to confirm that an ArrayBuffer passed to a view constructor is at least as big as the view. Defaults to `true` so the length is checked. Setting this value to `false` is useful for variable views that end with a union. Note that even if the length is not checked, JavaScript guarantees you cannot read or write beyond the end of allocated memory.
+
+#### `json`
+The `json` property controls whether CompileDataView generates code for JSON serialization and object initialization. This experimental feature defaults to `false`.  
+
+With `json` enabled, you can serialize binary objects to JSON, even those with embedded views. This is implemented by including `toJSON` methods on the view classes. 
+
+```js
+let i = new IntroRecord;
+i.a = 12;
+i.c = "!";
+i.data = [1, 1, 1, 1];
+let json = JSON.stringify(i);
+```
+
+With `json` enabled, you can also initialized binary objects from JavaScript objects. This is done by adding a static `from` method to the view classes.
+
+```js
+let i = IntroRecord.from({
+	a: 12,
+	c: "!",
+	data: [1, 1, 1, 1]
+});
+```
+
+> **Note**: The `json` feature generates more code, so only enable it if you intend to use the capabilities it provides.
+> 
+> **Note**: The initialization support works with unions, but serialization does not  support unions. 
 
 ### Property types
 CompileDataView supports all the types of values provided by `DataView` and adds support for smaller integers using bitfields, arrays of numbers, booleans, characters, and strings.

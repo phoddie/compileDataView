@@ -62,6 +62,8 @@ let output;
 let classes;
 let properties;
 let bitfields;
+let jsonOutput;
+let fromOutput;
 let byteOffset;
 let lineNumber;
 let littleEndian;
@@ -76,6 +78,7 @@ let checkByteLength;
 let union;
 let classAlign;
 let anonymousUnion;
+let json;
 
 const hex = "0123456789ABCDEF";
 function toHex(value, byteCount = 4) {
@@ -117,10 +120,14 @@ function splitSource(source) {
 	let parts = [], part = "";
 	let map = [];
 	let line = 1;
+	let directive = false, lineStart = true;
 
 splitLoop:
-	for (let i = 0, length = source.length; i < length; i++) {
+	for (let i = 0, length = source.length, previous = "\n"; i < length; previous = source[i], i++) {
 		const c = source[i]
+
+		if ("\n" === c)
+			lineStart = true;
 
 		switch (c) {
 			case "{":
@@ -131,6 +138,13 @@ splitLoop:
 			case "]":
 			case "(":
 			case ")":
+			case "+":
+			case "-":
+			case "*":
+			case "^":
+			case "|":
+			case "&":
+			case "!":
 				if (part) {
 					parts.push(part);
 					map.push(line);
@@ -147,9 +161,14 @@ splitLoop:
 					parts.push(part);
 					map.push(line);
 				}
-
-				if ("\n" === c)
+				if ("\n" === c) {
+					if (directive) {
+						directive = false;
+						parts.push(c);
+						map.push(line);
+					}
 					line += 1;
+				}
 
 				part = "";
 				break;
@@ -166,10 +185,19 @@ splitLoop:
 				part += c;
 				break;
 
+			case "#":
+				if (lineStart)
+					directive = true;
+				part += c;
+				break;
+
 			default:
 				part += c;
 				break;
 		}
+
+		if ((" " !== c) && ("\t" !== c) && ("\n" !== c))
+			lineStart = false;
 	}
 
 	if (part) {
@@ -241,19 +269,23 @@ function flushBitfields(bitsToAdd = 32) {
 	endField(byteCount);
 }
 
+const kDefaultPack = 16;
+
 function compileDataView(input) {
 	className = undefined;
 	output = [];
 	properties = [];
 	classes = {};
 	bitfields = [];
+	jsonOutput = [];
+	fromOutput = [];
 	byteOffset = 0;
 	lineNumber = 1;
 	littleEndian = true;
 	doSet = true;
 	doGet = true;
 	doExport = true;
-	pack = 1;
+	pack = kDefaultPack;
 	extendsClass = "DataView";
 	xs = true;
 	outputByteLength = false;
@@ -261,6 +293,7 @@ function compileDataView(input) {
 	union = undefined;
 	classAlign = 0;
 	anonymousUnion = false;
+	json = false;
 
 	let final = [];
 	const errors = [];
@@ -310,6 +343,26 @@ function compileDataView(input) {
 
 				if (";" !== parts[pos++])
 					throw new Error(`expected semicolon`);
+
+				if (json) {
+					if (doGet) {
+						output.push(`   toJSON() {`);
+						output.push(`      return {`);
+						output = output.concat(jsonOutput);
+						output.push(`      };`);
+						output.push(`   }`);
+					}
+					jsonOutput.length = 0;
+
+					if (doSet) {
+						output.push(`   static from(obj) {`);
+						output.push(`      const result = new ${className};`);
+						output = output.concat(fromOutput);
+						output.push(`      return result;`);
+						output.push(`   }`);
+					}
+					fromOutput.length = 0;
+				}
 
 				output.push(`}`);
 				output.push(``);
@@ -366,7 +419,7 @@ function compileDataView(input) {
 				className = validateName(parts[pos]);
 				if (classes[className])
 					throw new Error(`duplicate class "${className}"`);
-				classAlign = pack;
+				classAlign = 1;
 
 				union = 0;
 				anonymousUnion = false;
@@ -383,7 +436,9 @@ function compileDataView(input) {
 					throw new Error(`open brace expected`);
 
 				className = isTypedef;
-				classAlign = pack;
+				classAlign = 1;
+				jsonOutput = [];
+				fromOutput = [];
 
 				pos += 2;
 				continue;
@@ -399,7 +454,9 @@ function compileDataView(input) {
 				className = validateName(parts[pos]);
 				if (classes[className])
 					throw new Error(`duplicate class "${className}"`);
-				classAlign = pack;
+				classAlign = 1;
+				jsonOutput = [];
+				fromOutput = [];
 
 				pos += 2;
 				continue;
@@ -413,7 +470,7 @@ function compileDataView(input) {
 
 				switch (setting) {
 					case "extends":
-						extendsClass = value;
+						extendsClass = validateName(value);
 						break;
 
 					case "endian":
@@ -426,11 +483,17 @@ function compileDataView(input) {
 						break;
 
 					case "pack":
-						value = parseInt(value);
-						if (0 === value)
-							value = 1;
-						if (![1, 2, 4, 8, 16].includes(value))
-							throw new Error(`invalid pack`);
+						if (")" === value) {
+							value =  kDefaultPack;
+							pos -= 1;
+						}
+						else {
+							value = parseInt(value);
+							if (0 === value)
+								value = kDefaultPack;
+							if (![1, 2, 4, 8, 16].includes(value))
+								throw new Error(`invalid pack`);
+						}
 						pack = value;
 						break;
 
@@ -458,6 +521,10 @@ function compileDataView(input) {
 						checkByteLength = booleanSetting(value, setting);
 						break;
 
+					case "json":
+						json = booleanSetting(value, setting);
+						break;
+
 					default:
 						throw new Error(`unknown pragma "${setting}"`);
 						break;
@@ -465,6 +532,9 @@ function compileDataView(input) {
 
 				if (")" !== parts[pos++])
 					throw new Error(`close parenthesis expected`);
+
+				if ("\n" !== parts[pos++])
+					throw new Error(`end of line expected`);
 
 				continue;
 			}
@@ -531,7 +601,7 @@ function compileDataView(input) {
 					if (byteOffset % align)
 						endField(align - (byteOffset % align));
 
-					if (!classAlign)
+					if (classAlign < align)
 						classAlign = align;
 
 					if (doGet) {
@@ -565,6 +635,13 @@ function compileDataView(input) {
 					}
 
 					endField((arrayCount ?? 1) * byteCount);
+
+					if (undefined === arrayCount)
+						jsonOutput.push(`         ${name}: this.${name},`);
+					else
+						jsonOutput.push(`         ${name}: Array.from(this.${name}),`);
+
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
 					} break;
 
 				case "char":
@@ -579,9 +656,9 @@ function compileDataView(input) {
 							output.push(`      return String.fromCharCode(this.getUint8(${byteOffset}));`);
 						else {
 							if (xs)
-								output.push(`      return String.fromArrayBuffer(this.buffer.slice(${byteOffset}, ${byteOffset + arrayCount}));`);
+								output.push(`      return String.fromArrayBuffer(this.buffer.slice(this.byteOffset + ${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
 							else
-								output.push(`      return TextDecoder().decode(this.buffer.slice(${byteOffset}, ${byteOffset + arrayCount}));`);
+								output.push(`      return TextDecoder().decode(this.byteOffset +  this.buffer.slice(${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
 						}
 						output.push(`   }`);
 					}
@@ -607,6 +684,10 @@ function compileDataView(input) {
 					}
 
 					endField(arrayCount ?? 1);
+
+					jsonOutput.push(`         ${name}: this.${name},`);
+
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
 					break;
 
 				case "Uint":
@@ -619,6 +700,10 @@ function compileDataView(input) {
 						name,
 						bitCount
 					});
+
+					jsonOutput.push(`         ${name}: this.${name},`);
+
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
 					break;
 
 				case "Boolean":
@@ -635,6 +720,10 @@ function compileDataView(input) {
 						bitCount: 1,
 						boolean: true
 					});
+
+					jsonOutput.push(`         ${name}: this.${name},`);
+
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
 					break;
 
 				default: {
@@ -648,7 +737,7 @@ function compileDataView(input) {
 
 					if (undefined !== bitCount)
 						throw new Error(`cannot use bitfield with "${type}"`);
-
+debugger;
 					const align = Math.min(pack, classes[type].align);
 					if (byteOffset % align)
 						endField(align - (byteOffset % align));
@@ -667,6 +756,10 @@ function compileDataView(input) {
 					}
 
 					endField(classes[type].byteLength);
+
+					jsonOutput.push(`         ${name}: this.${name}.toJSON(),`);
+
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = ${type}.from(obj.${name});`);
 					} break;
 			}
 		}
