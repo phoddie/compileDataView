@@ -20,7 +20,7 @@ The introduction of [DataView](https://developer.mozilla.org/en-US/docs/Web/Java
 Using CompileDataView, this C data structure:
 
 ```c
-struct IntroRecord {
+struct IntroView {
    int32_t a;
    uint8_t b;
    char c;
@@ -43,7 +43,7 @@ i.data[2] = 11;
 To create views like `IntroView`, you provide CompileDataView with description of the binary data structure using a C-like syntax. It generates JavaScript code to implement your data structure. For this example, the description is simply the C `struct` declaration above which generates the following JavaScript:
 
 ```js
-export class IntroRecord extends DataView {
+export class IntroView extends DataView {
    constructor(data, offset) {
       if (data)
          super(data, offset ?? 0, 18);
@@ -123,37 +123,71 @@ import {IntroView} from "dataviews";
 ```
 
 ### Using the generated classes in your project
-There are two ways to use the generated classes in your scripts. The first is to create a new instance of the record. This initializes all values to zero:
+There are several ways to use the generated classes in your scripts. 
+
+#### Creating new instance
+You can create a new a new instance of the record which allocates the memory for the view and initializes all values to zero. You don't need to pass any arguments as the class knows the size of the data structure.
 
 ```js
-let record = new ExampleView;
+let record= new IntroView;
 ```
 
 You can then set and get the properties you defined.
 
-The second way is to wrap the view around an existing buffer of data. This is useful when you receive a buffer of data in a known format from a network source or from reading a file. The view constructor, `ExampleView` here supports both the `buffer` and `byteOffset` parameters of the `DataView` constructor. If you have a buffer in the format of `ExampleView`, you can read its contents as follows:
+#### Wrapping an existing buffer
+If you have a buffer that contains a binary data structure already, you can wrap the view around it. This is useful when you receive a buffer of data in a known format from a network source or from reading a file. The view constructor, `ExampleView` here supports both the `buffer` and `byteOffset` parameters of the `DataView` constructor. If you have a buffer in the format of `ExampleView`, you can read its contents as follows:
 
 ```js
-let record = new ExampleView(buffer);
+let record = new IntroView(buffer);
 trace(record.a, "\n");
 ```
 
 If the data begins somewhere inside the `buffer,` but not at offset zero, pass the byte offset as the second parameter:
 
 ```js
-let record = new ExampleView(buffer, 16);
+let record = new IntroView(buffer, 16);
 trace(record.a, "\n");
 ```
 
 Because views are a fixed size, the constructor does not support the optional third parameter, `byteLength`, of the `DataView` constructor.
 
+
+#### Getting the binary data of a view
 To access the binary data of the view, use the `buffer` property as with the underlying `DataView`. For example:
 
 ```js
-let record = new ExampleView;
+let record = new IntroView;
 record.a = 12;
 file.write(record.buffer);
 ```
+
+#### Initializing a binary data structure from JavaScript objects
+You can create a new binary data structure and use JavaScript objects to initialize one or more of its fields.
+
+```js
+let i = IntroView.from({
+	a: 0x80001234,
+	b: 3,
+	c: "!",
+	f: i.a / i.b,
+	data: [1, 2, 3, 4]
+});
+```
+
+To use the `from` feature, set `#pragma json(true)` when compiling the view.
+
+#### Serializing a binary data structure to JSON
+You can create JSON output for a binary view using the standard `JSON.stringify` call.
+
+```js
+let i = new IntroView;
+let json = JSON.stringify(i, null, "   ");
+trace(json, "\n");
+```
+
+This capability is helpful when debugging as it allows easily outputting the entire binary data structure.
+
+To use JSON serialization, set `#pragma json(true)` when compiling the view.
 
 ## Reference
 This section is explains the the binary data format description used by CompileDataView. It is very similar to C, though not identical.
@@ -204,7 +238,7 @@ The behavior of CompileDataView is controlled using pragmas. For example, use th
 
 > **Note**: The parser in CompileDataView is far from a full C compiler and supports only a small subset of the C language. It is intended to be familiar to C programmers but not to support all C `struct` declarations.
 
-### Configuring CompileDataView
+### Configuring CompileDataView using Pragmas
 Pragmas control how CompileDataView generates code for properties. All pragmas are optional. The defaults are designed to be reasonable and safe for use on embedded systems.
 
 Pragmas can be changed in mid-file. For example, changing the `endian` pragma, which controls how multi-byte numbers are stored, allows CompileDataView to support obscure data structures that have both big-endian and little-endian values.
@@ -314,7 +348,7 @@ Note that TypedArrays in JavaScript must be aligned to `byteOffset` values that 
 
 ```c
 #pragma pack(1)
-struct Fail {
+struct Misaligned {
 	char c;
 	uint32_t data[4];
 };
@@ -323,7 +357,7 @@ struct Fail {
 When accessed as follows, an exception is generated because the Uint32 TypedArray must be at a `byteOffset` that is a multiple of 4.
 
 ```js
-let f = new Fail;
+let f = new Misaligned;
 f.data[1] = 3;
 ```
 
@@ -341,20 +375,20 @@ The `checkByteLength ` pragma controls whether CompileDataView generates code to
 #### `json`
 The `json` property controls whether CompileDataView generates code for JSON serialization and object initialization. This experimental feature defaults to `false`.  
 
-With `json` enabled, you can serialize binary objects to JSON, even those with embedded views. This is implemented by including `toJSON` methods on the view classes. 
+With `json` enabled, you can serialize binary views to JSON, even those with embedded views. CompileDataView implements this by adding `toJSON` methods to the generated view classes. 
 
 ```js
-let i = new IntroRecord;
+let i = new IntroView;
 i.a = 12;
 i.c = "!";
 i.data = [1, 1, 1, 1];
 let json = JSON.stringify(i);
 ```
 
-With `json` enabled, you can also initialized binary objects from JavaScript objects. This is done by adding a static `from` method to the view classes.
+With `json` enabled, you use JavaScript objects to initialize binary data views using the static `from` method.
 
 ```js
-let i = IntroRecord.from({
+let i = IntroView.from({
 	a: 12,
 	c: "!",
 	data: [1, 1, 1, 1]
@@ -435,7 +469,7 @@ struct BitFields {
 };
 ```
 
-This declaration uses only one byte of storage.
+This declaration uses a 1-byte `ArrayBuffer`.
 
 Bitfields and arrays are mutually exclusive: you cannot have an array of `Uint` values.
 
@@ -530,7 +564,6 @@ As a quick project, CompileDataView is a little rough. I know little about writi
 
 While CompileDataView is useful today, there are areas that could be explored further.
  
-- **Initializers**: In some data structures, some properties should be initialized to a non-zero value. This could be done with the syntax `Int8 foo = 1;` with the assignment applied in the constructor.
 - **ASCII strings**: The `string` type stores UTF-8 which is useful, but 8-bit character data is common enough in many binary formats that it makes sense to support directly.
 - **Date**: It might be useful to allow `Date` objects to be stored directly, as Booleans are.
 - **Code generation**: The code for copying structures and strings could be optimized based on the size of the copy.
