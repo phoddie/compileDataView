@@ -76,6 +76,7 @@ let xs;
 let outputByteLength;
 let checkByteLength;
 let union;
+let enumState;
 let classAlign;
 let anonymousUnion;
 let json;
@@ -145,6 +146,8 @@ splitLoop:
 			case "|":
 			case "&":
 			case "!":
+			case ",":
+			case "=":
 				if (part) {
 					parts.push(part);
 					map.push(line);
@@ -291,6 +294,7 @@ function compileDataView(input) {
 	outputByteLength = false;
 	checkByteLength = true;
 	union = undefined;
+	enumState = undefined;
 	classAlign = 0;
 	anonymousUnion = false;
 	json = false;
@@ -330,6 +334,27 @@ function compileDataView(input) {
 
 						continue;
 					}
+				}
+				else
+				if (undefined !== enumState) {
+					output.push(`${doExport ? "export " : ""}const ${className} = Object.freeze({`);
+					for (let [name, value] of enumState)
+						output.push(`   ${name}: ${value},`);
+					output.push(`});`);
+					output.push(``);
+
+					final = final.concat(output);
+					output.length = 0;
+
+					classes[className] = {
+						byteLength: 4,
+						align: Math.min(pack, 4),		// enum is int
+					};
+					TypeAliases[className] = "Int32"
+
+					enumState = undefined;
+					className = undefined;
+					continue;
 				}
 
 				if (!byteOffset)
@@ -425,6 +450,23 @@ function compileDataView(input) {
 				anonymousUnion = false;
 
 				pos += 2;
+				continue;
+			}
+
+			if (part === "enum") {
+				if (className)
+					throw new Error(`enum must be at root`);
+
+				className = validateName(parts[pos++]);
+				if (classes[className])
+					throw new Error(`duplicate name "${enumState.name}"`);
+
+				enumState = new Map;
+				enumState.value = 0;
+
+				if ("{" !== parts[pos++])
+					throw new Error(`open brace expected`);
+
 				continue;
 			}
 
@@ -547,6 +589,31 @@ function compileDataView(input) {
 
 			if (!className)
 				throw new Error(`unexpected`);
+
+			if (enumState) {
+				if (enumState.has(part))
+					throw new Error(`duplicate name ${part} in enum`);
+
+				let value = ++enumState.value;
+				if ("=" === parts[pos]) {
+					enumState.value = value = parseInt(parts[++pos]);
+					if (isNaN(value))
+						throw new Error(`invalid value for ${part}`);
+					pos += 1;
+				}
+
+				if ("," === parts[pos])
+					pos += 1;
+				else if ("}" === parts[pos])
+					;
+				else
+					throw new Error(`syntax error`);
+
+				enumState.set(part, value);
+
+				continue;
+			}
+
 
 			let type = part;
 			let name = validateName(parts[pos++]);
@@ -737,7 +804,7 @@ function compileDataView(input) {
 
 					if (undefined !== bitCount)
 						throw new Error(`cannot use bitfield with "${type}"`);
-debugger;
+
 					const align = Math.min(pack, classes[type].align);
 					if (byteOffset % align)
 						endField(align - (byteOffset % align));
