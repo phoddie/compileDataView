@@ -77,6 +77,7 @@ let outputByteLength;
 let checkByteLength;
 let union;
 let enumState;
+let enumContext;
 let classAlign;
 let anonymousUnion;
 let json;
@@ -295,6 +296,7 @@ function compileDataView(input) {
 	checkByteLength = true;
 	union = undefined;
 	enumState = undefined;
+	enumContext = "";
 	classAlign = 0;
 	anonymousUnion = false;
 	json = false;
@@ -338,8 +340,11 @@ function compileDataView(input) {
 				else
 				if (undefined !== enumState) {
 					output.push(`${doExport ? "export " : ""}const ${className} = Object.freeze({`);
-					for (let [name, value] of enumState)
+					for (let [name, value] of enumState) {
+						if ("string" === typeof value)
+							value = '"' + value + '"';
 						output.push(`   ${name}: ${value},`);
+					}
 					output.push(`});`);
 					output.push(``);
 
@@ -462,7 +467,8 @@ function compileDataView(input) {
 					throw new Error(`duplicate name "${enumState.name}"`);
 
 				enumState = new Map;
-				enumState.value = 0;
+				enumState.value = -1;
+				enumContext += `const ${className} = {}\n`;
 
 				if ("{" !== parts[pos++])
 					throw new Error(`open brace expected`);
@@ -596,10 +602,26 @@ function compileDataView(input) {
 
 				let value = ++enumState.value;
 				if ("=" === parts[pos]) {
-					enumState.value = value = parseInt(parts[++pos]);
-					if (isNaN(value))
-						throw new Error(`invalid value for ${part}`);
 					pos += 1;
+					const comma = parts.indexOf(",", pos);
+					const brace = parts.indexOf("}", pos);
+					if ((-1 == comma) && (-1 == brace))
+						throw new Error(`syntax error`);
+					const end = Math.min((comma < 0) ? 32767 : comma, (brace < 0) ? 32767 : brace);
+					const expression = parts.slice(pos, end).join(" ");
+					let context = "(function () {\n" + enumContext;
+					for (let [name, value] of enumState) {
+						if ("string" === typeof value)
+							value = '"' + value + '"';
+						context += `const ${name} = ${value};\n`;
+					}
+					context += `return ${expression};\n`;
+					context += `})();`
+					enumState.value = value = eval(context);
+					const type = typeof value;
+					if (("number" != type) && ("string" !== type) && ("boolean" !== type))
+						throw new Error(`invalid value for ${part}`);
+					pos = end;
 				}
 
 				if ("," === parts[pos])
@@ -610,6 +632,10 @@ function compileDataView(input) {
 					throw new Error(`syntax error`);
 
 				enumState.set(part, value);
+
+				if ("string" === typeof value)
+					value = '"' + value + '"';
+				enumContext += `${className}.${part} = ${value};\n`;
 
 				continue;
 			}
@@ -626,13 +652,20 @@ function compileDataView(input) {
 			}
 			else {
 				if ("[" == parts[pos]) {
-					if ("]" !== parts[pos + 2])
+					const bracket = parts.indexOf("]", pos + 1);
+					if (bracket < 0)
 						throw new Error(`right brace expected`);
 
-					arrayCount = parseInt(parts[pos + 1]);
-					pos += 3;
+					const expression = parts.slice(pos + 1, bracket).join(" ");
+					let context = "(function () {\n" + enumContext;
+					context += `return ${expression};\n`;
+					context += `})();`
 
-					if ((arrayCount <= 0) || isNaN(arrayCount))
+					arrayCount = eval(context);
+					pos = bracket + 1;
+
+					arrayCount = Math.round(arrayCount);
+					if ((arrayCount <= 0) || isNaN(arrayCount) || (Infinity === arrayCount))
 						throw new Error(`invalid array count`);
 				}
 			}
