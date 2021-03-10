@@ -33,19 +33,21 @@ struct CharacterAndStrings {
    char b[15];
 };
 
-// bit-fields stored in integer
-//   of 8, 16, or 32 bits as needed
-// boolean/bool is a 1-bit bitfield
+/*
+  bit-fields are stored in integer
+  of 8, 16, or 32 bits as needed.
+  boolean/bool is a 1-bit bitfield
+*/
 struct BooleansAndBitFields {
    boolean b1;
    bool b2;
    bool b3;
 
-   Uint foo:1;
-   Uint bar:2;
-   Uint grr:4;
-   Uint zrr:16;
-   Uint yrr:4;
+   uint32_t foo:1;
+   uint32_t bar:2;
+   uint32_t grr:4;
+   uint32_t zrr:16;
+   uint32_t yrr:4;
 };
 
 struct FloatAndBigInts {

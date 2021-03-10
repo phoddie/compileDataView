@@ -231,7 +231,7 @@ function flushBitfields(bitsToAdd = 32) {
 	for (let i = 0; i < bitfields.length; i++)
 		total += bitfields[i].bitCount;
 
-	if ((0 == total) || ((total + bitsToAdd) < 32))
+	if ((0 == total) || ((total + bitsToAdd) <= 32))
 		return;
 
 	if (total <= 8) {
@@ -494,9 +494,12 @@ function compileDataView(input) {
 				continue;
 			}
 
-			if (("typedef" === part) && ("struct" === parts[pos])) {
+			if (("typedef" === part) && (("struct" === parts[pos]) || (("volatile" == parts[pos]) && ("struct" === parts[pos + 1])))) {
 				if (className)
 					throw new Error(`cannot nest structure`);
+
+				if ("volatile" == parts[pos])
+					pos += 1;
 
 				if ("{" !== parts[pos + 1])
 					throw new Error(`open brace expected`);
@@ -697,6 +700,15 @@ function compileDataView(input) {
 
 			if (TypeAliases[type])
 				type = TypeAliases[type];
+
+			if (bitCount) {
+				if (("Uint8" === type) || ("Uint16" === type) || ("Uint32" === type)) {
+					const byteCount = byteCounts[type];
+					if ((byteCount * 8) < bitCount)
+						throw new Error(`${type} too small for bitfield`);
+					type = "Uint";
+				}
+			}
 
 			switch (type) {
 				case "Float32":

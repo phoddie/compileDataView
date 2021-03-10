@@ -243,14 +243,14 @@ typedef struct {
 } B;
 ```
 
-Arrays and bitfields are supported. Unlike C, Bitfields are always unsigned and must be use the type `Uint`:
+Arrays and bitfields are supported. Unlike C, bitfields are always unsigned.
 
 ```c
 struct C {
 	int16_t c[4];
 
-	Uint c1:4;
-	Uint c2:2;
+	uint8_t c1:4;
+	uint8_t c2:2;
 };
 ```
 
@@ -341,19 +341,19 @@ for (let j = 0, values = i.values; j < 4; j++)
 #### Numeric bitfields
 Numeric bitfields are unsigned integer values of 1 to 31 bits. CompileDataView merges sequential bitfields into a single integer to reduce memory use.
 
-Numeric bitfields are declared using the `Uint` type and adopting C-style bitfield declarations:
+Numeric bitfields are declared using `uint8_t`, `uint16_t`, and `uint32_t` types with C-style bitfield declarations:
 
 ```c
 struct BitFields {
-	Uint oneBit:1;
-	Uint nybble:4;
-	Uint mask:3;
+	uint32_t oneBit:1;
+	uint32_t nybble:4;
+	uint32_t mask:3;
 };
 ```
 
 This declaration uses a 1-byte `ArrayBuffer`.
 
-Bitfields and arrays are mutually exclusive: you cannot have an array of `Uint` values.
+Bitfields and arrays are mutually exclusive: you cannot have an array of bitfeilds.
 
 <a id="type-boolean"></a>
 #### Boolean
