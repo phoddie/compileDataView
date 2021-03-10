@@ -2,7 +2,7 @@
 
 Copyright 2021 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: February 18, 2021
+Revised: March 8, 2021
 
 ## Table of Contents
 
@@ -238,9 +238,9 @@ A binary data format description contains one or more structures:
 struct A {
 	uint8_t a;
 };
-struct B {
+typedef struct {
 	uint32_t b;
-};
+} B;
 ```
 
 Arrays and bitfields are supported. Unlike C, Bitfields are always unsigned and must be use the type `Uint`:
@@ -267,7 +267,7 @@ struct D {
 };
 ```
 
-Comments begin with `//` and extend to the end of the line. Empty lines are ignored.
+Comments begin with `//` and extend to the end of the line or begin with `/*` and end at `*/`. Empty lines are ignored.
 
 The behavior of CompileDataView is controlled using [pragmas](#pragmas). For example, the `endian` pragma controls if multi-byte numbers are stored as big-endian values:
 

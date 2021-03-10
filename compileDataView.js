@@ -123,6 +123,7 @@ function splitSource(source) {
 	let map = [];
 	let line = 1;
 	let directive = false, lineStart = true;
+	let error;
 
 splitLoop:
 	for (let i = 0, length = source.length, previous = "\n"; i < length; previous = source[i], i++) {
@@ -132,6 +133,19 @@ splitLoop:
 			lineStart = true;
 
 		switch (c) {
+			case "*":
+				if ("/" === part) {
+					part = "";
+					i = source.indexOf("*/", i);
+					if (i < 0) {
+						error = `unterminated comment, line ${line}`;
+						break splitLoop;
+					}
+					i += 1;		// with ++ in for loop, this gives next character
+					continue splitLoop;
+				}
+				// fall through to handle "*" as separate part
+
 			case "{":
 			case "}":
 			case ":":
@@ -142,7 +156,6 @@ splitLoop:
 			case ")":
 			case "+":
 			case "-":
-			case "*":
 			case "^":
 			case "|":
 			case "&":
@@ -209,7 +222,7 @@ splitLoop:
 		map.push(line);
 	}
 
-	return {parts, map};
+	return {parts, map, error};
 }
 
 function flushBitfields(bitsToAdd = 32) {
@@ -305,7 +318,12 @@ function compileDataView(input) {
 	const errors = [];
 	const lines = input.split("\n");
 
-	const {parts, map} = splitSource(input);
+	const {parts, map, error} = splitSource(input);
+	if (error) {
+		errors.push(`   ${error}`);
+		parts.legnth = 0;
+	}
+
 	for (let pos = 0; pos < parts.length; ) {
 		const part = parts[pos++];
 		if (!part)
