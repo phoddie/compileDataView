@@ -1,8 +1,8 @@
 # CompileDataView
 
-Copyright 2021 Moddable Tech, Inc.<BR>
+Copyright 2021-2022 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: March 8, 2021
+Revised: February 4, 2022
 
 ## Table of Contents
 
@@ -353,7 +353,9 @@ struct BitFields {
 
 This declaration uses a 1-byte `ArrayBuffer`.
 
-Bitfields and arrays are mutually exclusive: you cannot have an array of bitfeilds.
+Bitfields and arrays are mutually exclusive: you cannot have an array of bitfields.
+
+By default the field in a bitfield are placed in the least significant bits free. To store the fields in the most significant bits free, use the `bitfields` pragma.
 
 <a id="type-boolean"></a>
 #### Boolean
@@ -600,6 +602,9 @@ let i = IntroView.from({
 > **Note**: The `json` feature generates more code, so only enable it if you intend to use the capabilities it provides.
 > 
 > **Note**: The initialization support works with unions, but serialization does not support unions. 
+
+#### `bitfields`
+The `bitfields ` pragma controls whether bitfields are stored in the least or most significant unused bits. The default is `"lsb"` to store bitfields in the least significant unused bits. To store bitfields in the most significant unused bits instead, use `"msb"`. 
 
 <a id="past-future"></a>
 ## Past and future

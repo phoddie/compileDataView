@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2021  Moddable Tech, Inc.
+* Copyright (c) 2021-2022  Moddable Tech, Inc.
 *
 *   This file is part of the Moddable SDK Tools.
 *
@@ -81,6 +81,7 @@ let enumContext;
 let classAlign;
 let anonymousUnion;
 let json;
+let bitfieldsLSB;
 
 const hex = "0123456789ABCDEF";
 function toHex(value, byteCount = 4) {
@@ -242,12 +243,13 @@ function flushBitfields(bitsToAdd = 32) {
 	else {
 		type = (total <= 16) ? "Uint16" : "Uint32";
 		byteCount = (total <= 16) ? 2 : 4;
-		endian = ", true";
+		endian = littleEndian ? ", true" : ", false";
 	}
 
-	let bitOffset = 0;
+	let bitsOutput = 0;
 	while (bitfields.length) {
 		const bitfield = bitfields.shift();
+		const bitOffset = bitfieldsLSB ? bitsOutput : ((byteCount << 3) - bitsOutput - bitfield.bitCount);
 		const mask = (2 ** bitfield.bitCount) - 1;
 		const shiftLeft = bitOffset ? " << " + bitOffset : "";
 		const shiftRight = bitOffset ? " >> " + bitOffset : "";
@@ -278,7 +280,7 @@ function flushBitfields(bitsToAdd = 32) {
 			output.push(`   }`);
 		}
 
-		bitOffset += bitfield.bitCount;
+		bitsOutput += bitfield.bitCount;
 	}
 
 	bitfields.length = 0;
@@ -313,6 +315,7 @@ function compileDataView(input) {
 	classAlign = 0;
 	anonymousUnion = false;
 	json = false;
+	bitfieldsLSB = true;
 
 	let final = [];
 	const errors = [];
@@ -543,9 +546,9 @@ function compileDataView(input) {
 						break;
 
 					case "endian":
-						if ("little" == value)
+						if ("little" === value)
 							littleEndian = true;
-						else if ("big" == value)
+						else if ("big" === value)
 							littleEndian = false;
 						else
 							throw new Error(`invalid endian "${value}" specified`);
@@ -592,6 +595,15 @@ function compileDataView(input) {
 
 					case "json":
 						json = booleanSetting(value, setting);
+						break;
+
+					case "bitfields":
+						if ("lsb" === value)
+							bitfieldsLSB = true;
+						else if ("msb" === value)
+							bitfieldsLSB = false;
+						else
+							throw new Error(`invalid bitfields "${value}" specified`);
 						break;
 
 					default:
