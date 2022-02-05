@@ -2,7 +2,7 @@
 
 Copyright 2021-2022 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: February 4, 2022
+Revised: February 5, 2022
 
 ## Table of Contents
 
@@ -310,7 +310,7 @@ struct ArrayExample {
 };
 ```
 
-Array are properties may be set full arrays:
+Array properties may be set using a full array:
 
 ```js
 let i = new ArrayExample;
@@ -324,7 +324,7 @@ They may also be set by individual element:
 i.values[2] = 11;
 ```
 
-Reading an array property returns a reference to the data as the corresponding TypedArray. This allows scripts to use TypedArray methods, such as `fill`, on array properties.
+Reading an array property returns a reference to the data as the corresponding TypedArray type. This allows scripts to use TypedArray methods, such as `fill`, on array properties.
 
 ```js
 i.values.fill(0xff);
@@ -355,11 +355,11 @@ This declaration uses a 1-byte `ArrayBuffer`.
 
 Bitfields and arrays are mutually exclusive: you cannot have an array of bitfields.
 
-By default the field in a bitfield are placed in the least significant bits free. To store the fields in the most significant bits free, use the `bitfields` pragma.
+By default the field in a bitfield are placed in the least significant free bits. To store the fields in the most significant free bits, use the `bitfields` pragma.
 
 <a id="type-boolean"></a>
 #### Boolean
-Boolean values allow JavaScript `true` and `false` values to be stored in a `DataView`. Boolean values are treated as a bitfield with a size of one bit. When setting the property, a truthy value is 1; when reading, the return values are `true` and `false`.
+Boolean values store JavaScript `true` and `false` values in a `DataView`. Boolean values are treated as a bitfield with a size of one bit. When setting the property, a truthy value is 1; when reading, the return values are `true` and `false`.
 
 ```c
 struct Booleans {
@@ -482,7 +482,7 @@ The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint
 #### `pack`
 The `pack` pragma controls the alignment of multi-byte numeric values. The default is `16` which causes values to be aligned based on the size the fields they contain. The default is generally compatible with C and safe for all JavaScript operations. Supported values are `1`, `2`, `4`, `8`, and `16`. Passing no argument for pack (`#pragma pack()`) restores the default.
 
-Views that are used only to reduce the memory required for properties may use the default value of `1` which packs thee fields as tightly as possible.
+Views that are used only to reduce the memory required for properties may use the default value of `1` which packs the fields as tightly as possible.
 
 To see how pack works, consider the following data view description:
 
