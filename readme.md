@@ -475,7 +475,7 @@ The `get` and `set` pragmas control whether the generated class contains getters
 Excluding getters or setters generates less code and has no performance impact. This is useful when you know a particular data structure is only used for reading or writing.
 
 #### `endian`
-The `endian` pragma controls how multi-byte numeric values are stored. The default is `"little"` for little-endian values. For big-endian values, use `"big"`. Views that are used to only reduce the memory required for properties should not change the `endian` pragma from the default.
+The `endian` pragma controls how multi-byte numeric values are stored. The default is `"host"` which will match the host endianness at runtime.  Other options are "little" for little-endian order and `"big"` for big-endian. Views that are used to only reduce the memory required for properties should not change the `endian` pragma from the default as native machine order is the most efficient.
 
 The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`. The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
 

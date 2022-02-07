@@ -258,7 +258,7 @@ function flushBitfields(bitsToAdd = 32) {
 	else {
 		type = (total <= 16) ? "Uint16" : "Uint32";
 		byteCount = (total <= 16) ? 2 : 4;
-		endian = littleEndian ? ", true" : ", false";
+		endian = ", " + littleEndian;
 	}
 
 	let bitsOutput = 0;
@@ -315,7 +315,7 @@ function compileDataView(input) {
 	fromOutput = [];
 	byteOffset = 0;
 	lineNumber = 1;
-	littleEndian = true;
+	littleEndian = "isLittleEndian";
 	typescript = false;
 	doSet = true;
 	doGet = true;
@@ -340,7 +340,7 @@ function compileDataView(input) {
 	const {parts, map, error} = splitSource(input);
 	if (error) {
 		errors.push(`   ${error}`);
-		parts.legnth = 0;
+		parts.length = 0;
 	}
 
 	for (let pos = 0; pos < parts.length; ) {
@@ -572,9 +572,11 @@ function compileDataView(input) {
 
 					case "endian":
 						if ("little" === value)
-							littleEndian = true;
+							littleEndian = "true";
 						else if ("big" === value)
-							littleEndian = false;
+							littleEndian = "false";
+						else if ("host" === value)
+							littleEndian = "isLittleEndian";
 						else
 							throw new Error(`invalid endian "${value}" specified`);
 						break;
@@ -958,6 +960,14 @@ function compileDataView(input) {
 		errors.push("*/")
 		errors.push("")
 	}
+
+	let preamble = [];
+	if (littleEndian == 'isLittleEndian') {
+		preamble.push('let isLittleEndian = !!new Uint8Array(new Uint16Array([1]).buffer)[0];');
+		preamble.push("");
+	}
+
+	final = preamble.concat(final);
 
 	return {
 		script: final.join("\n"),
