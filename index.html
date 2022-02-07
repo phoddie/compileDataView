@@ -19,7 +19,10 @@ textarea {
 
 <script>
 const defaultDescription =
-`struct Integers {
+`#pragma typescript(true)
+#pragma json(true)
+
+struct Integers {
    uint16_t size;
    uint32_t source;
    int8_t id;
