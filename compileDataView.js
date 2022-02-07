@@ -270,7 +270,7 @@ function flushBitfields(bitsToAdd = 32) {
 		const shiftRight = bitOffset ? " >> " + bitOffset : "";
 
 		if (doGet) {
-			output.push(`   get ${bitfield.name}() {`);
+			output.push(`   get ${bitfield.name}()${typescript ? `: ${bitfield.boolean ? "boolean" : "number"}` : ""} {`);
 			if (bitfield.boolean)
 				output.push(`      return Boolean(this.get${type}(${byteOffset}${endian}) & ${toHex(mask << bitOffset, byteCount)});`);
 			else
@@ -279,7 +279,7 @@ function flushBitfields(bitsToAdd = 32) {
 		}
 
 		if (doSet) {
-			output.push(`   set ${bitfield.name}(value) {`);
+			output.push(`   set ${bitfield.name}(value${typescript ? `: ${bitfield.boolean ? "boolean" : "number"}` : ""}) {`);
 			if (bitfield.boolean) {
 				output.push(`      const t = this.get${type}(${byteOffset}${endian});`);
 				output.push(`      this.set${type}(${byteOffset}, value ? (t | ${toHex(1 << bitOffset)}) : (t & ${toHex(~(mask << bitOffset), byteCount)})${endian});`);
@@ -766,11 +766,11 @@ function compileDataView(input) {
 					if (classAlign < align)
 						classAlign = align;
 
-					const typescriptType = (undefined === arrayCount) ? TypescriptTypeAliases[type] : `${type}Array`;
-					const typescriptDecl = (typescript ? `: ${typescriptType}` : "");
+					const typescriptGetDecl = (typescript ? `: ${(undefined === arrayCount) ? TypescriptTypeAliases[type] : `${type}Array`}` : "");
+					const typescriptSetDecl = (typescript ? `: ${(undefined === arrayCount) ? TypescriptTypeAliases[type] : `ArrayLike<${TypescriptTypeAliases[type]}>`}` : "");
 
 					if (doGet) {
-						output.push(`   get ${name}()${typescriptDecl} {`);
+						output.push(`   get ${name}()${typescriptGetDecl} {`);
 						if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      return this.get${type}(${byteOffset});`);
@@ -778,13 +778,13 @@ function compileDataView(input) {
 								output.push(`      return this.get${type}(${byteOffset}, ${littleEndian});`);
 						}
 						else {
-							output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount * byteCount});`);
+							output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
 						}
 						output.push(`   }`);
 					}
 
 					if (doSet) {
-						output.push(`   set ${name}(value${typescriptDecl}) {`);
+						output.push(`   set ${name}(value${typescriptSetDecl}) {`);
 						if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      this.set${type}(${byteOffset}, value);`);
@@ -792,8 +792,11 @@ function compileDataView(input) {
 								output.push(`      this.set${type}(${byteOffset}, value, ${littleEndian});`);
 						}
 						else {
-							output.push(`      for (let i = 0, j = ${byteOffset}; i < ${arrayCount}; i++, j += ${byteCount})`);
-							output.push(`         this.set${type}(j, value[i]);`);
+							output.push(`      for (let i = 0, j = this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}; i < ${arrayCount}; i++, j += ${byteCount})`);
+							if (1 === byteCount)
+								output.push(`         this.set${type}(j, value[i]);`);
+							else
+								output.push(`         this.set${type}(j, value[i], ${littleEndian});`);
 						}
 
 						output.push(`   }`);
@@ -908,13 +911,13 @@ function compileDataView(input) {
 						endField(align - (byteOffset % align));
 
 					if (doGet) {
-						output.push(`   get ${name}() {`);
+						output.push(`   get ${name}()${typescript ? `: ${type}` : ""} {`);
 						output.push(`      return new ${type}(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""});`);
 						output.push(`   }`);
 					}
 
 					if (doSet) {
-						output.push(`   set ${name}(value) {`);
+						output.push(`   set ${name}(value${typescript ? `: ${type}` : ""}) {`);
 						output.push(`      for (let i = 0; i < ${classes[type].byteLength}; i++)`);
 						output.push(`         this.setUint8(i + ${byteOffset}, value.getUint8(i));`);
 						output.push(`   }`);
