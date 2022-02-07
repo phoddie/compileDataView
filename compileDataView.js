@@ -376,13 +376,22 @@ function compileDataView(input) {
 				}
 				else
 				if (undefined !== enumState) {
-					output.push(`${doExport ? "export " : ""}const ${className} = Object.freeze({`);
+					if (typescript)
+						output.push(`${doExport ? "export " : ""}enum ${className} {`);
+					else
+						output.push(`${doExport ? "export " : ""}const ${className} = Object.freeze({`);
 					for (let [name, value] of enumState) {
 						if ("string" === typeof value)
 							value = '"' + value + '"';
-						output.push(`   ${name}: ${value},`);
+						if (typescript)
+							output.push(`   ${name} = ${value},`);
+						else
+							output.push(`   ${name}: ${value},`);
 					}
-					output.push(`});`);
+					if (typescript)
+						output.push(`};`);
+					else
+						output.push(`});`);
 					output.push(``);
 
 					final = final.concat(output);
