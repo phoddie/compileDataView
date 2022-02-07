@@ -78,6 +78,7 @@ let properties;
 let bitfields;
 let jsonOutput;
 let fromOutput;
+let isUsingArrayTypes;
 let byteOffset;
 let lineNumber;
 let littleEndian;
@@ -313,6 +314,7 @@ function compileDataView(input) {
 	bitfields = [];
 	jsonOutput = [];
 	fromOutput = [];
+	isUsingArrayTypes = false;
 	byteOffset = 0;
 	lineNumber = 1;
 	littleEndian = "isLittleEndian";
@@ -779,6 +781,7 @@ function compileDataView(input) {
 
 					const typescriptGetDecl = (typescript ? `: ${(undefined === arrayCount) ? TypescriptTypeAliases[type] : `${type}Array`}` : "");
 					const typescriptSetDecl = (typescript ? `: ${(undefined === arrayCount) ? TypescriptTypeAliases[type] : `ArrayLike<${TypescriptTypeAliases[type]}>`}` : "");
+					const typescriptValueType = (type == "BigUint64" || type == "BigInt64") ? "bigint" : "number";
 
 					if (doGet) {
 						output.push(`   get ${name}()${typescriptGetDecl} {`);
@@ -789,7 +792,21 @@ function compileDataView(input) {
 								output.push(`      return this.get${type}(${byteOffset}, ${littleEndian});`);
 						}
 						else {
-							output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
+							if (1 === byteCount)
+								output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
+							else {
+								isUsingArrayTypes = true;
+								output.push("      const _ = this;");
+								output.push(`      return new Proxy(new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount}), isLittleEndian ? {`);
+								output.push(`         get: function(target${typescript ? `: ${type}Array` : ""}, index${typescript ? ": string" : ""}) {`);
+								output.push(`            return _.get${type}(_.byteOffset${byteOffset ? (" + " + byteOffset) : ""} + Number.parseInt(index) * ${byteCount}, ${littleEndian});`);
+								output.push("         },");
+								output.push(`         set: function(target${typescript ? `: ${type}Array` : ""}, index${typescript ? ": string" : ""}, value${typescript ? `: ${typescriptValueType}` : ""})${typescript ? ": boolean" : ""} {`);
+								output.push(`            _.set${type}(_.byteOffset${byteOffset ? (" + " + byteOffset) : ""} + Number.parseInt(index) * ${byteCount}, value, ${littleEndian});`);
+								output.push("            return true;");
+								output.push("         },");
+								output.push("      } : {});");
+							}
 						}
 						output.push(`   }`);
 					}
@@ -962,7 +979,7 @@ function compileDataView(input) {
 	}
 
 	let preamble = [];
-	if (littleEndian == 'isLittleEndian') {
+	if (littleEndian == 'isLittleEndian' || isUsingArrayTypes) {
 		preamble.push('let isLittleEndian = !!new Uint8Array(new Uint16Array([1]).buffer)[0];');
 		preamble.push("");
 	}
