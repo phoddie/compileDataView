@@ -29,7 +29,6 @@ if (process.argv.length < 3 || process.argv.length > 4) {
 }
 
 const sourcePath = process.argv[2];
-const targetPath = (process.argv.length > 3) ? process.argv[3] : path.format({ ...path.parse(sourcePath), base: '', ext: '.js' });
 
 const sourceContents = fs.readFileSync(sourcePath, { encoding: 'utf-8' });
 
@@ -39,6 +38,7 @@ if (compileResults.errors) {
     compileResults.script = compileResults.errors.concat(compileResults.script);
 }
 
+const targetPath = (process.argv.length > 3) ? process.argv[3] : path.format({ ...path.parse(sourcePath), base: '', ext: `.${compileResults.target}` });
 fs.writeFileSync(targetPath, compileResults.script, { encoding: 'utf-8' });
 
 process.exit(compileResults.errors ? 1 : 0);
