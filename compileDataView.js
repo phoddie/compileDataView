@@ -989,7 +989,8 @@ function compileDataView(input) {
 
 	return {
 		script: final.join("\n"),
-		errors: errors.join("\n")
+		errors: errors.join("\n"),
+		target: typescript ? 'ts' : 'js'
 	}
 }
 globalThis.compileDataView = compileDataView;
