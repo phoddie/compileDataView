@@ -795,9 +795,10 @@ function compileDataView(input) {
 							if (1 === byteCount)
 								output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
 							else {
-								isUsingArrayTypes = true;
+								if (littleEndian !== "true")
+									isUsingArrayTypes = true;
 								output.push("      const _ = this;");
-								output.push(`      return new Proxy(new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount}), isLittleEndian ? {`);
+								output.push(`      return new Proxy(new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount}), ${(littleEndian !== "true") ? "isLittleEndian ? " : ""}{`);
 								output.push(`         get: function(target${typescript ? `: ${type}Array` : ""}, index${typescript ? ": string" : ""}) {`);
 								output.push(`            return _.get${type}(_.byteOffset${byteOffset ? (" + " + byteOffset) : ""} + Number.parseInt(index) * ${byteCount}, ${littleEndian});`);
 								output.push("         },");
