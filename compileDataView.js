@@ -357,7 +357,7 @@ function compileDataView(input) {
 	const {parts, map, error} = splitSource(input);
 	if (error) {
 		errors.push(`   ${error}`);
-		parts.legnth = 0;
+		parts.length = 0;
 	}
 
 	for (let pos = 0; pos < parts.length; ) {
