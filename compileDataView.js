@@ -476,7 +476,7 @@ function compileDataView(input) {
 				const limit = checkByteLength ? `, ${byteOffset}` : "";
 				start.add({
 					javascript: `   constructor(data, offset) {`,
-					typescript: `   constructor(data?: ArrayBuffer, offset?: number) {`
+					typescript: `   constructor(data?: ArrayBufferLike, offset?: number) {`
 				});
 				start.push(`      if (data)`);
 				start.push(`         super(data, offset ?? 0${limit});`);
