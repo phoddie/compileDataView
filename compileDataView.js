@@ -55,6 +55,20 @@ const TypeAliases = {
 	bool: "Boolean"
 };
 
+const TypescriptTypeAliases = {
+	Uint8: "number",
+	Uint16: "number",
+	Uint32: "number",
+	BigUint64: "bigint",
+	Int8: "number",
+	Int16: "number",
+	Int32: "number",
+	BigInt64: "bigint",
+	Float32: "number",
+	Float64: "number",
+	Boolean: "boolean"
+}
+
 const isTypedef = Symbol("typedef");
 
 let className;
@@ -64,9 +78,11 @@ let properties;
 let bitfields;
 let jsonOutput;
 let fromOutput;
+let isUsingArrayTypes;
 let byteOffset;
 let lineNumber;
 let littleEndian;
+let typescript;
 let doSet;
 let doGet;
 let doExport;
@@ -243,7 +259,7 @@ function flushBitfields(bitsToAdd = 32) {
 	else {
 		type = (total <= 16) ? "Uint16" : "Uint32";
 		byteCount = (total <= 16) ? 2 : 4;
-		endian = littleEndian ? ", true" : ", false";
+		endian = ", " + littleEndian;
 	}
 
 	let bitsOutput = 0;
@@ -255,7 +271,7 @@ function flushBitfields(bitsToAdd = 32) {
 		const shiftRight = bitOffset ? " >> " + bitOffset : "";
 
 		if (doGet) {
-			output.push(`   get ${bitfield.name}() {`);
+			output.push(`   get ${bitfield.name}()${typescript ? `: ${bitfield.boolean ? "boolean" : "number"}` : ""} {`);
 			if (bitfield.boolean)
 				output.push(`      return Boolean(this.get${type}(${byteOffset}${endian}) & ${toHex(mask << bitOffset, byteCount)});`);
 			else
@@ -264,7 +280,7 @@ function flushBitfields(bitsToAdd = 32) {
 		}
 
 		if (doSet) {
-			output.push(`   set ${bitfield.name}(value) {`);
+			output.push(`   set ${bitfield.name}(value${typescript ? `: ${bitfield.boolean ? "boolean" : "number"}` : ""}) {`);
 			if (bitfield.boolean) {
 				output.push(`      const t = this.get${type}(${byteOffset}${endian});`);
 				output.push(`      this.set${type}(${byteOffset}, value ? (t | ${toHex(1 << bitOffset)}) : (t & ${toHex(~(mask << bitOffset), byteCount)})${endian});`);
@@ -298,9 +314,11 @@ function compileDataView(input) {
 	bitfields = [];
 	jsonOutput = [];
 	fromOutput = [];
+	isUsingArrayTypes = false;
 	byteOffset = 0;
 	lineNumber = 1;
-	littleEndian = true;
+	littleEndian = "isLittleEndian";
+	typescript = false;
 	doSet = true;
 	doGet = true;
 	doExport = true;
@@ -324,7 +342,7 @@ function compileDataView(input) {
 	const {parts, map, error} = splitSource(input);
 	if (error) {
 		errors.push(`   ${error}`);
-		parts.legnth = 0;
+		parts.length = 0;
 	}
 
 	for (let pos = 0; pos < parts.length; ) {
@@ -360,13 +378,22 @@ function compileDataView(input) {
 				}
 				else
 				if (undefined !== enumState) {
-					output.push(`${doExport ? "export " : ""}const ${className} = Object.freeze({`);
+					if (typescript)
+						output.push(`${doExport ? "export " : ""}enum ${className} {`);
+					else
+						output.push(`${doExport ? "export " : ""}const ${className} = Object.freeze({`);
 					for (let [name, value] of enumState) {
 						if ("string" === typeof value)
 							value = '"' + value + '"';
-						output.push(`   ${name}: ${value},`);
+						if (typescript)
+							output.push(`   ${name} = ${value},`);
+						else
+							output.push(`   ${name}: ${value},`);
 					}
-					output.push(`});`);
+					if (typescript)
+						output.push(`};`);
+					else
+						output.push(`});`);
 					output.push(``);
 
 					final = final.concat(output);
@@ -397,7 +424,7 @@ function compileDataView(input) {
 
 				if (json) {
 					if (doGet) {
-						output.push(`   toJSON() {`);
+						output.push(`   toJSON()${typescript ? `: object` : ""} {`);
 						output.push(`      return {`);
 						output = output.concat(jsonOutput);
 						output.push(`      };`);
@@ -406,9 +433,9 @@ function compileDataView(input) {
 					jsonOutput.length = 0;
 
 					if (doSet) {
-						output.push(`   static from(obj) {`);
+						output.push(`   static from(obj${typescript ? `: object` : ""})${typescript ? `: ${className}` : ""} {`);
 						output.push(`      const result = new ${className};`);
-						output = output.concat(fromOutput);
+						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
 						output.push(`      return result;`);
 						output.push(`   }`);
 					}
@@ -426,7 +453,7 @@ function compileDataView(input) {
 				}
 
 				const limit = checkByteLength ? `, ${byteOffset}` : "";
-				start.push(`   constructor(data, offset) {`);
+				start.push(`   constructor(data${typescript ? "?: ArrayBuffer" : ""}, offset${typescript ? "?: number" : ""}) {`);
 				start.push(`      if (data)`);
 				start.push(`         super(data, offset ?? 0${limit});`);
 				start.push(`       else`);
@@ -547,9 +574,11 @@ function compileDataView(input) {
 
 					case "endian":
 						if ("little" === value)
-							littleEndian = true;
+							littleEndian = "true";
 						else if ("big" === value)
-							littleEndian = false;
+							littleEndian = "false";
+						else if ("host" === value)
+							littleEndian = "isLittleEndian";
 						else
 							throw new Error(`invalid endian "${value}" specified`);
 						break;
@@ -606,6 +635,10 @@ function compileDataView(input) {
 							throw new Error(`invalid bitfields "${value}" specified`);
 						break;
 
+					case "typescript":
+						typescript = booleanSetting(value, setting);
+						break;
+	
 					default:
 						throw new Error(`unknown pragma "${setting}"`);
 						break;
@@ -746,8 +779,12 @@ function compileDataView(input) {
 					if (classAlign < align)
 						classAlign = align;
 
+					const typescriptGetDecl = (typescript ? `: ${(undefined === arrayCount) ? TypescriptTypeAliases[type] : `${type}Array`}` : "");
+					const typescriptSetDecl = (typescript ? `: ${(undefined === arrayCount) ? TypescriptTypeAliases[type] : `ArrayLike<${TypescriptTypeAliases[type]}>`}` : "");
+					const typescriptValueType = (type == "BigUint64" || type == "BigInt64") ? "bigint" : "number";
+
 					if (doGet) {
-						output.push(`   get ${name}() {`);
+						output.push(`   get ${name}()${typescriptGetDecl} {`);
 						if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      return this.get${type}(${byteOffset});`);
@@ -755,13 +792,28 @@ function compileDataView(input) {
 								output.push(`      return this.get${type}(${byteOffset}, ${littleEndian});`);
 						}
 						else {
-							output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount * byteCount});`);
+							if (1 === byteCount)
+								output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
+							else {
+								if (littleEndian !== "true")
+									isUsingArrayTypes = true;
+								output.push("      const _ = this;");
+								output.push(`      return new Proxy(new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount}), ${(littleEndian !== "true") ? "isLittleEndian ? " : ""}{`);
+								output.push(`         get: function(target${typescript ? `: ${type}Array` : ""}, index${typescript ? ": string" : ""}) {`);
+								output.push(`            return _.get${type}(_.byteOffset${byteOffset ? (" + " + byteOffset) : ""} + Number.parseInt(index) * ${byteCount}, ${littleEndian});`);
+								output.push("         },");
+								output.push(`         set: function(target${typescript ? `: ${type}Array` : ""}, index${typescript ? ": string" : ""}, value${typescript ? `: ${typescriptValueType}` : ""})${typescript ? ": boolean" : ""} {`);
+								output.push(`            _.set${type}(_.byteOffset${byteOffset ? (" + " + byteOffset) : ""} + Number.parseInt(index) * ${byteCount}, value, ${littleEndian});`);
+								output.push("            return true;");
+								output.push("         },");
+								output.push("      } : {});");
+							}
 						}
 						output.push(`   }`);
 					}
 
 					if (doSet) {
-						output.push(`   set ${name}(value) {`);
+						output.push(`   set ${name}(value${typescriptSetDecl}) {`);
 						if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      this.set${type}(${byteOffset}, value);`);
@@ -769,8 +821,11 @@ function compileDataView(input) {
 								output.push(`      this.set${type}(${byteOffset}, value, ${littleEndian});`);
 						}
 						else {
-							output.push(`      for (let i = 0, j = ${byteOffset}; i < ${arrayCount}; i++, j += ${byteCount})`);
-							output.push(`         this.set${type}(j, value[i]);`);
+							output.push(`      for (let i = 0, j = this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}; i < ${arrayCount}; i++, j += ${byteCount})`);
+							if (1 === byteCount)
+								output.push(`         this.set${type}(j, value[i]);`);
+							else
+								output.push(`         this.set${type}(j, value[i], ${littleEndian});`);
 						}
 
 						output.push(`   }`);
@@ -783,7 +838,7 @@ function compileDataView(input) {
 					else
 						jsonOutput.push(`         ${name}: Array.from(this.${name}),`);
 
-					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = ${typescript ? "(<##LATE_CAST##> obj)" : "obj"}.${name};`);
 					} break;
 
 				case "char":
@@ -793,32 +848,32 @@ function compileDataView(input) {
 						throw new Error(`char cannot use bitfield`);
 
 					if (doGet) {
-						output.push(`   get ${name}() {`);
+						output.push(`   get ${name}()${typescript ? ": string" : ""} {`);
 						if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      return String.fromCharCode(this.getUint8(${byteOffset}));`);
 						else {
 							if (xs)
 								output.push(`      return String.fromArrayBuffer(this.buffer.slice(this.byteOffset + ${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
 							else
-								output.push(`      return TextDecoder().decode(this.byteOffset +  this.buffer.slice(${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
+								output.push(`      return new TextDecoder().decode(this.buffer.slice(${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
 						}
 						output.push(`   }`);
 					}
 
 					if (doSet) {
-						output.push(`   set ${name}(value) {`);
+						output.push(`   set ${name}(value${typescript ? ": string" : ""}) {`);
 						if ((undefined === arrayCount) || (1 === arrayCount))
-							output.push(`      return this.setUint8(${byteOffset}, value.charCodeAt());`);
+							output.push(`      this.setUint8(${byteOffset}, value.charCodeAt(0));`);
 						else {
 							if (xs)
-								output.push(`      value = new Uint8Array(ArrayBuffer.fromString(value));`);
+								output.push(`      const arrayValue = new Uint8Array(ArrayBuffer.fromString(value));`);
 							else
-								output.push(`      value = new TextEncoder().encode(value);`);
-							output.push(`      const byteLength = value.byteLength;`);
+								output.push(`      const arrayValue = new TextEncoder().encode(value);`);
+							output.push(`      const byteLength = arrayValue.byteLength;`);
 							output.push(`      if (byteLength > ${arrayCount})`);
 							output.push(`         throw new Error("too long");`);
 							output.push(`      for (let i = 0; i < byteLength; i++)`);
-							output.push(`         this.setUint8(${byteOffset} + i, value[i]);`);
+							output.push(`         this.setUint8(${byteOffset} + i, arrayValue[i]);`);
 							output.push(`      for (let i = byteLength; i < ${arrayCount}; i++)`);
 							output.push(`         this.setUint8(${byteOffset} + i, 0);`);
 						}
@@ -829,7 +884,7 @@ function compileDataView(input) {
 
 					jsonOutput.push(`         ${name}: this.${name},`);
 
-					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = ${typescript ? "(<##LATE_CAST##> obj)" : "obj"}.${name};`);
 					break;
 
 				case "Uint":
@@ -845,7 +900,7 @@ function compileDataView(input) {
 
 					jsonOutput.push(`         ${name}: this.${name},`);
 
-					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = ${typescript ? "(<##LATE_CAST##> obj)" : "obj"}.${name};`);
 					break;
 
 				case "Boolean":
@@ -865,7 +920,7 @@ function compileDataView(input) {
 
 					jsonOutput.push(`         ${name}: this.${name},`);
 
-					fromOutput.push(`      if ("${name}" in obj) result.${name} = obj.${name};`);
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = ${typescript ? "(<##LATE_CAST##> obj)" : "obj"}.${name};`);
 					break;
 
 				default: {
@@ -885,13 +940,13 @@ function compileDataView(input) {
 						endField(align - (byteOffset % align));
 
 					if (doGet) {
-						output.push(`   get ${name}() {`);
+						output.push(`   get ${name}()${typescript ? `: ${type}` : ""} {`);
 						output.push(`      return new ${type}(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""});`);
 						output.push(`   }`);
 					}
 
 					if (doSet) {
-						output.push(`   set ${name}(value) {`);
+						output.push(`   set ${name}(value${typescript ? `: ${type}` : ""}) {`);
 						output.push(`      for (let i = 0; i < ${classes[type].byteLength}; i++)`);
 						output.push(`         this.setUint8(i + ${byteOffset}, value.getUint8(i));`);
 						output.push(`   }`);
@@ -901,7 +956,7 @@ function compileDataView(input) {
 
 					jsonOutput.push(`         ${name}: this.${name}.toJSON(),`);
 
-					fromOutput.push(`      if ("${name}" in obj) result.${name} = ${type}.from(obj.${name});`);
+					fromOutput.push(`      if ("${name}" in obj) result.${name} = ${type}.from(${typescript ? "(<##LATE_CAST##> obj)" : "obj"}.${name});`);
 					} break;
 			}
 		}
@@ -914,11 +969,9 @@ function compileDataView(input) {
 		errors.push(`   incomplete struct at end of file`);
 
 	final.push("/*");
-	final.push("");
-	final.push(`View classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
-	final.push("");
-	final.push(input);
+	final.push(`\tView classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
 	final.push("*/");
+	final.push(input.replace(/^|\n/g, '\n// '));
 
 	if (errors.length) {
 		errors.unshift("/*")
@@ -926,9 +979,18 @@ function compileDataView(input) {
 		errors.push("")
 	}
 
+	let preamble = [];
+	if (littleEndian == 'isLittleEndian' || isUsingArrayTypes) {
+		preamble.push('let isLittleEndian = !!new Uint8Array(new Uint16Array([1]).buffer)[0];');
+		preamble.push("");
+	}
+
+	final = preamble.concat(final);
+
 	return {
 		script: final.join("\n"),
-		errors: errors.join("\n")
+		errors: errors.join("\n"),
+		target: typescript ? 'ts' : 'js'
 	}
 }
 globalThis.compileDataView = compileDataView;

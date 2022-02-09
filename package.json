@@ -1,0 +1,19 @@
+{
+  "name": "cdv",
+  "version": "0.1.0",
+  "description": "Compile Data View CLI",
+  "main": "cli/cdv.js",
+  "type": "module",
+  "scripts": {
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phoddie/compileDataView.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/phoddie/compileDataView/issues"
+  },
+  "homepage": "https://github.com/phoddie/compileDataView#readme"
+}
