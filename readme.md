@@ -2,7 +2,7 @@
 
 Copyright 2021-2022 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: February 5, 2022
+Revised: February 8, 2022
 
 ## Table of Contents
 
@@ -629,6 +629,8 @@ While CompileDataView is useful today, there are areas that could be explored fu
 <a id="acknowledgements"></a>
 ## Acknowledgements
 The motivation for creating CompileDataView was code kindly shared in the [Embedded JavaScript Gitter](https://gitter.im/embedded-javascript/moddable) by an embedded developer ([@SkyeSweeney](https://github.com/SkyeSweeney)) writing their first JavaScript code.
+
+Support for TypeScript output was contributed by [Chris Midgley](https://github.com/cmidgley).
 
 The original syntax of the binary data descriptions was unnecessarily complex. Thanks to Patrick Soquet for encouraging me to follow the C model more closely.
 
