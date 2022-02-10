@@ -460,12 +460,12 @@ The following pragmas are available (first option is the default):
 - [`bitfields(lsb | msb`](#bitfields)
 - [`typescript(false | true)`](#typescript)
 - [`comments(header | none | all)`](#comments)
-- [`implements(<custom>`)](#implements)
+- [`implements(none | <custom>`)](#implements)
 
 #### `extends`
 The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
 
-```
+```c
 #pragma extends(CustomDataView)
 ```
 
@@ -628,17 +628,29 @@ The `typescript` pragma controls if the output format should include typing for 
 The `comments` pragma controls how block (`/* ... */`) comments are injected into the output.  Options are `none`, `header` (include only the header block comment, which must start on the first line of the file) and `all` (include all block comments).  Line comments (`// ...`) are never injected.  This can be changed throughout the file.  Default is `header`.
 
 #### `implements`
-The `implements` pragma adds an options `implements` to the class definition, in addition to the `extends`.  For example,
+The `implements` pragma adds `implements` to the class definition, in addition to `extends`.  Stays enabled for all remaining classes, but can be disabled with `none`.  For example,
 
-```
+```c
 #pragma implements(MyInterface)
+struct FirstExample {
+   ...
+};
+#pragma implement(none)
+struct SecondExample {
+   ...
+};
 ```
 
-generates the following class declaration:
+generates the following:
 
 ```js
-class CompiledDataView extends DataView implements MyInterface {
-...
+class FirstExample extends DataView implements MyInterface {
+   ...
+}
+
+class SecondExample extends DataView {
+   ...
+}
 ```
 
 <a id="past-future"></a>
