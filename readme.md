@@ -447,18 +447,20 @@ Pragmas control how CompileDataView generates code for properties. All pragmas a
 
 Pragmas can be changed in mid-file. For example, changing the `endian` pragma, which controls how multi-byte numbers are stored, allows CompileDataView to support obscure data structures that have both big-endian and little-endian values.
 
-The following pragmas are available:
-- [`extends`](#extends)
-- [`export`](#export)
-- [`get` and `set`](#get-and-set)
-- [`endian`](#endian)
-- [`pack`](#pack)
-- [`xs`](#xs)
-- [`outputByteLength`](#outputbytelength)
-- [`checkByteLength`](#checkbytelength)
-- [`json`](#json)
-- [`bitfields`](#bitfields)
-- [`typescript`](#typescript)
+The following pragmas are available (first option is the default):
+- [`extends(DataView | <custom>)`](#extends)
+- [`export(true, false)`](#export)
+- [`get(true | false)` and `set(true | false)`](#get-and-set)
+- [`endian(little | big)`](#endian)
+- [`pack(16 | 8 | 4 | 2 | 1)`](#pack)
+- [`xs(true | false)`](#xs)
+- [`outputByteLength(false | true)`](#outputbytelength)
+- [`checkByteLength(true | false)`](#checkbytelength)
+- [`json(false | true)`](#json)
+- [`bitfields(lsb | msb`](#bitfields)
+- [`typescript(false | true)`](#typescript)
+- [`comments(header | none | all)`](#comments)
+- [`implements(<custom>`)](#implements)
 
 #### `extends`
 The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
@@ -622,6 +624,22 @@ The `bitfields ` pragma controls whether bitfields are stored in the least or mo
 #### `typescript`
 The `typescript` pragma controls if the output format should include typing for TypeScript.  The default is `false`. 
 
+#### `comments`
+The `comments` pragma controls how block (`/* ... */`) comments are injected into the output.  Options are `none`, `header` (include only the header block comment, which must start on the first line of the file) and `all` (include all block comments).  Line comments (`// ...`) are never injected.  This can be changed throughout the file.  Default is `header`.
+
+#### `implements`
+The `implements` pragma adds an options `implements` to the class definition, in addition to the `extends`.  For example,
+
+```
+#pragma implements(MyInterface)
+```
+
+generates the following class declaration:
+
+```js
+class CompiledDataView extends DataView implements MyInterface {
+...
+```
 
 <a id="past-future"></a>
 ## Past and future
