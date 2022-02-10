@@ -4,6 +4,7 @@
 #pragma comments(all)           // include all block comments
 #pragma typescript(true)        // enable TypeScript
 #pragma json(true)              // include JSON methods
+#pragma import("./MyInterface") // generates "import from "./MyInterface" to get interfaces types
 
 // Line comments are always ignored
 
@@ -18,7 +19,7 @@ enum Masks {
    Because "#pragma comments(all)" is enabled, this block comment
    will be included in the output
 */
-#pragma implements(myInterface)     // implements "myInterface"
+#pragma implements(MyInterface)     // implements "MyInterface"
 struct Integers {
    /* block comments also work here */
    uint16_t size;

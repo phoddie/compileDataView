@@ -461,6 +461,7 @@ The following pragmas are available (first option is the default):
 - [`typescript(false | true)`](#typescript)
 - [`comments(header | none | all)`](#comments)
 - [`implements(none | <custom>`)](#implements)
+- [`import(<quoted path>)`](#import)
 
 #### `extends`
 The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
@@ -628,7 +629,7 @@ The `typescript` pragma controls if the output format should include typing for 
 The `comments` pragma controls how block (`/* ... */`) comments are injected into the output.  Options are `none`, `header` (include only the header block comment, which must start on the first line of the file) and `all` (include all block comments).  Line comments (`// ...`) are never injected.  This can be changed throughout the file.  Default is `header`.
 
 #### `implements`
-The `implements` pragma adds `implements` to the class definition, in addition to `extends`.  Stays enabled for all remaining classes, but can be disabled with `none`.  For example,
+The `implements` pragma adds `implements` to the class definition, in addition to `extends`.  Stays enabled for all remaining classes, but can be disabled with `none`.  See [`import`](#import) for importing the type definition for the interface.  For example,
 
 ```c
 #pragma implements(MyInterface)
@@ -651,6 +652,19 @@ class FirstExample extends DataView implements MyInterface {
 class SecondExample extends DataView {
    ...
 }
+```
+
+#### `import`
+The `import` pragma injects an import for pulling in TypeScript type definitions, in support for the `implements` pragma.  The parameter specifies the path to the import and should be enclosed in quotes.  Multiple imports can be specified by using the pragma multiple times.  For example,
+
+```c
+#pragma import("./MyInterface")
+```
+
+will generate:
+
+```js
+import from "./MyInterface"
 ```
 
 <a id="past-future"></a>
