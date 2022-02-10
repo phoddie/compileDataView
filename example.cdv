@@ -1,0 +1,114 @@
+/**
+   Example block header
+*/
+#pragma comments(header)
+// Example line comment
+#pragma typescript(true)
+// this line should be ignored.
+#pragma json(true)
+#pragma xs(false)
+#pragma endian(little)
+
+enum Masks {
+   a = 1 << 31,
+   b = 0x00FF0000,
+   c = 0b001100,
+   notC = ~c
+};
+
+/*
+   Define this structure
+*/
+#pragma implements(myInterface)
+struct Integers {
+   /** define size item */
+   uint16_t size;
+   /** define source item */
+   uint32_t source;
+   /*
+      Multi-line before an item
+   */
+   int8_t id;
+   int16_t origin;
+   uint8_t uuid[16];
+};
+
+// char is a one character String
+struct CharacterAndStrings {
+   char a;
+   char b[15];
+};
+
+/*
+  bit-fields are stored in integer
+  of 8, 16, or 32 bits as needed.
+  boolean/bool is a 1-bit bitfield
+*/
+struct BooleansAndBitFields {
+   boolean b1;
+   bool b2;
+   bool b3;
+
+   uint32_t foo:1;
+   uint32_t bar:2;
+   uint32_t grr:4;
+   uint32_t zrr:16;
+   uint32_t yrr:4;
+};
+
+struct FloatAndBigInts {
+   float f32;
+   double f64[2];
+   int64_t big;
+   uint64_t bigger[2];
+};
+
+struct EmbedAll {
+   Integers i;
+   BooleansAndBitFields b;
+   CharacterAndStrings c;
+   FloatAndBigInts f;
+};
+
+// anonymous union in struct
+struct UnionAll {
+   uint8_t kind;
+   union {
+      char text[16];
+      Integers i;
+      BooleansAndBitFields b;
+      CharacterAndStrings c;
+      FloatAndBigInts f;
+   };
+};
+
+// named union outside struct
+union Ints {
+   uint8_t a;
+   uint16_t b;
+   uint32_t c;
+};
+
+// typedef struct
+typedef struct {
+   float f[2];
+} FloatArray;
+
+// JavaScript type names
+struct JavaScriptTypes {
+   Uint8 au;
+   Uint16 bu;
+   Uint32 cu;
+
+   Int8 as;
+   Int16 bs;
+   Int32 cs;
+
+   Float32 f32;
+   Float64 f64;
+
+   BigInt64 b1;
+   BigUint64 b2;
+
+   Boolean boo;
+};
