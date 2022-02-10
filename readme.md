@@ -664,7 +664,7 @@ The `import` pragma injects an import for pulling in TypeScript type definitions
 will generate:
 
 ```js
-import from "./MyInterface"
+import "./MyInterface"
 ```
 
 <a id="past-future"></a>

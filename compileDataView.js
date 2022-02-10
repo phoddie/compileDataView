@@ -695,7 +695,7 @@ function compileDataView(input) {
 					case "import":
 						if (className)
 							throw new Error(`import invalid inside statements`);
-						output.push(`import from ${value};\n`);
+						output.push(`import ${value};\n`);
 						break;
 	
 					default:
