@@ -413,7 +413,7 @@ function compileDataView(input) {
 					}
 					output.add({
 						javascript: `});`,
-						typescript: `};`,
+						typescript: `}`,
 					});
 					output.push(``);
 
@@ -690,6 +690,12 @@ function compileDataView(input) {
 							implementsInterfaces = undefined;
 						else
 							implementsInterfaces = validateName(value);
+						break;
+
+					case "import":
+						if (className)
+							throw new Error(`import invalid inside statements`);
+						output.push(`import from ${value};\n`);
 						break;
 	
 					default:
