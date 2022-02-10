@@ -96,6 +96,8 @@ let classAlign;
 let anonymousUnion;
 let json;
 let bitfieldsLSB;
+let comments;
+let implementsInterfaces;
 
 class Output extends Array {
 	add(line) {
@@ -168,6 +170,8 @@ splitLoop:
 						error = `unterminated comment, line ${line}`;
 						break splitLoop;
 					}
+					parts.push(`/${source.slice(i, endComment)}*/`);
+					map.push(line);
 					line += source.slice(i, endComment).split("\n").length - 1;
 					i = endComment + 1;		// with ++ in for loop, this gives next character
 					continue splitLoop;
@@ -349,6 +353,8 @@ function compileDataView(input) {
 	anonymousUnion = false;
 	json = false;
 	bitfieldsLSB = true;
+	comments = "header";
+	implementsInterfaces = "";
 
 	let final = [];
 	const errors = [];
@@ -467,7 +473,10 @@ function compileDataView(input) {
 				output.push(``);
 
 				const start = new Output;
-				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
+				if (implementsInterfaces)
+					start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} implements ${implementsInterfaces} {`);
+				else
+					start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
 				if (outputByteLength) {
 					start.push(`   static byteLength = ${byteOffset};`);
 					start.push(``);
@@ -585,6 +594,15 @@ function compileDataView(input) {
 				continue;
 			}
 
+			if (part.startsWith("/*")) {
+				if (("header" === comments && pos == 1) || "all" === comments)
+					if (className)
+						output.push('   ' + part);
+					else
+						final.push(part);
+				continue;
+			}
+
 			if ("#pragma" === part) {
 				let setting = parts[pos++];
 				if ("(" !== parts[pos++])
@@ -659,6 +677,16 @@ function compileDataView(input) {
 
 					case "typescript":
 						language = booleanSetting(value, setting) ? "typescript" : "javascript";
+						break;
+
+					case "comments":
+						if (!["none", "header", "all"].includes(value))
+							throw new Error(`invalid comments "${value}" specified`);
+						comments = value;
+						break;
+
+					case "implements":
+						implementsInterfaces = validateName(value);
 						break;
 	
 					default:
