@@ -686,7 +686,10 @@ function compileDataView(input) {
 						break;
 
 					case "implements":
-						implementsInterfaces = validateName(value);
+						if ("none" === value)
+							implementsInterfaces = undefined;
+						else
+							implementsInterfaces = validateName(value);
 						break;
 	
 					default:
