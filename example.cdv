@@ -1,13 +1,11 @@
 /**
-   Example block header
+   Header comment by default is included
 */
-#pragma comments(header)
-// Example line comment
-#pragma typescript(true)
-// this line should be ignored.
-#pragma json(true)
-#pragma xs(false)
-#pragma endian(little)
+#pragma comments(all)           // include all block comments
+#pragma typescript(true)        // enable TypeScript
+#pragma json(true)              // include JSON methods
+
+// Line comments are always ignored
 
 enum Masks {
    a = 1 << 31,
@@ -17,25 +15,28 @@ enum Masks {
 };
 
 /*
-   Define this structure
+   Because "#pragma comments(all)" is enabled, this block comment
+   will be included in the output
 */
-#pragma implements(myInterface)
+#pragma implements(myInterface)     // implements "myInterface"
 struct Integers {
-   /** define size item */
+   /* block comments also work here */
    uint16_t size;
-   /** define source item */
-   uint32_t source;
-   /*
-      Multi-line before an item
+   /**
+      Multi-line JSDocs format works as well
    */
+   uint32_t source;
    int8_t id;
    int16_t origin;
    uint8_t uuid[16];
 };
 
-// char is a one character String
+#pragma comments(none)      // all block comments will be ignored from here down
+/*
+   This comment is ignored
+*/
 struct CharacterAndStrings {
-   char a;
+   char a;                  // char is a one character String
    char b[15];
 };
 
@@ -55,6 +56,8 @@ struct BooleansAndBitFields {
    uint32_t zrr:16;
    uint32_t yrr:4;
 };
+
+#pragma implements(none)    // disable implements for remaining
 
 struct FloatAndBigInts {
    float f32;
