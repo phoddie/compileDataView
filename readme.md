@@ -453,7 +453,8 @@ The following pragmas are available (first option is the default):
 - [`get(true | false)` and `set(true | false)`](#get-and-set)
 - [`endian(little | big)`](#endian)
 - [`pack(16 | 8 | 4 | 2 | 1)`](#pack)
-- [`xs(true | false)`](#xs)
+- [`xs(true | false)`](#xs) (deprecated; see `target`)
+- [`target(xs | js | node)`](#target)
 - [`outputByteLength(false | true)`](#outputbytelength)
 - [`checkByteLength(true | false)`](#checkbytelength)
 - [`json(false | true)`](#json)
@@ -581,10 +582,19 @@ let f = new Misaligned;
 f.data[1] = 3;
 ```
 
-#### `xs`
+#### `xs` (deprecated)
 The `xs` property controls whether CompileDataView generates code targeting the XS JavaScript engine. The default value is `true`. The only difference in generated code is for string (character array) properties, where CompileDataView uses `String.fromArrayBuffer` and `ArrayBuffer.fromString` in place of `TextDecoder` and `TextEncoder` of the web platform.
 
 At this time there is no option to generate code for strings that works for both XS and the web platform, though it is possible.
+
+This feature has been deprecated, see [`target`](#target) for the replacement.
+
+#### `target`
+The `target` property controls the platform that the generated code is targeting.  The main difference between the platforms is how the generated code handles strings inside arrays.  Supported options are:
+
+* `xs` (default): Uses `String.fromArrayBuffer` and `ArrayBuffer.fromString` for string to/from buffers (replaces `#pragma xs(true)`).
+* `js`: Uses `TextEncoder` and `TextDecoder` for string to/from buffers (replaces `#pragma xs(false)`).
+* `node`: Same as `js`, except also provides the required imports `import { TextEncoder, TextDecoder } from "util" };`.
 
 #### `outputByteLength`
 The `outputByteLength` pragma controls whether CompileDataView includes a static `byteLength` property in the generated class with the number of bytes used by the native data structure. Defaults to `false`.

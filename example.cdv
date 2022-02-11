@@ -4,6 +4,7 @@
 #pragma comments(all)           // include all block comments
 #pragma typescript(true)        // enable TypeScript
 #pragma json(true)              // include JSON methods
+#pragma target(node)            // use Node style string buffers
 #pragma import("./MyInterface") // generates "import from "./MyInterface" to get interfaces types
 
 // Line comments are always ignored

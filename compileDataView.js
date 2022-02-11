@@ -87,6 +87,7 @@ let doExport;
 let pack;
 let extendsClass;
 let xs;
+let importText;
 let outputByteLength;
 let checkByteLength;
 let union;
@@ -344,6 +345,7 @@ function compileDataView(input) {
 	pack = kDefaultPack;
 	extendsClass = "DataView";
 	xs = true;
+	importText = false;
 	outputByteLength = false;
 	checkByteLength = true;
 	union = undefined;
@@ -370,6 +372,11 @@ function compileDataView(input) {
 		const part = parts[pos++];
 		if (!part)
 			throw new Error("unexpected state");
+
+		if (!xs && importText && (0 !== pos || part.startsWith("/*"))) {
+			final.push("\nimport { TextEncoder, TextDecoder } from \"util\";");
+			importText = false;
+		}
 
 		try {
 			let bitCount, arrayCount;
@@ -642,6 +649,19 @@ function compileDataView(input) {
 						xs = booleanSetting(value, setting);
 						break;
 
+					case "target":
+						if ("xs" === value)
+							xs = true;
+						else if ("js" === value) {
+							xs = false;
+							importText = false;
+						} else if ("node" === value) {
+							xs = false;
+							importText = true;
+						} else 
+							throw new Error(`invalid target "${value}" specified`)
+						break;
+							
 					case "set":
 						doSet = booleanSetting(value, setting);
 						break;
@@ -695,7 +715,7 @@ function compileDataView(input) {
 					case "import":
 						if (className)
 							throw new Error(`import invalid inside statements`);
-						output.push(`import ${value};\n`);
+						output.push(`import ${value};`);
 						break;
 	
 					default:
