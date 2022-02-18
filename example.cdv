@@ -1,11 +1,10 @@
 /**
    Header comment by default is included
 */
-#pragma comments(all)           // include all block comments
-#pragma typescript(true)        // enable TypeScript
-#pragma json(true)              // include JSON methods
-#pragma target(node)            // use Node style string buffers
-#pragma import("./MyInterface") // generates "import from "./MyInterface" to get interfaces types
+#pragma comments(true)              // include all block comments
+#pragma json(true)                  // include JSON methods
+#pragma language(typescript/node)   // use TypeScript with Node style string buffers
+#pragma import({ MyInterface } from "./MyInterface")     // generates "import { MyInterface } from "./MyInterface" to get interfaces types
 
 // Line comments are always ignored
 
@@ -17,7 +16,7 @@ enum Masks {
 };
 
 /*
-   Because "#pragma comments(all)" is enabled, this block comment
+   Because "#pragma comments(true)" is enabled, this block comment
    will be included in the output
 */
 #pragma implements(MyInterface)     // implements "MyInterface"
@@ -33,7 +32,7 @@ struct Integers {
    uint8_t uuid[16];
 };
 
-#pragma comments(none)      // all block comments will be ignored from here down
+#pragma comments(false)      // all block comments will be ignored from here down
 /*
    This comment is ignored
 */

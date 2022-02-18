@@ -81,13 +81,13 @@ let fromOutput;
 let byteOffset;
 let littleEndian;
 let language;
+let platform;
 let doSet;
 let doGet;
 let doExport;
 let pack;
 let extendsClass;
-let xs;
-let importText;
+let imports;
 let outputByteLength;
 let checkByteLength;
 let union;
@@ -339,13 +339,13 @@ function compileDataView(input) {
 	byteOffset = 0;
 	littleEndian = true;
 	language = "javascript";
+	platform = "xs";
 	doSet = true;
 	doGet = true;
 	doExport = true;
 	pack = kDefaultPack;
 	extendsClass = "DataView";
-	xs = true;
-	importText = false;
+	imports = [];
 	outputByteLength = false;
 	checkByteLength = true;
 	union = undefined;
@@ -373,9 +373,9 @@ function compileDataView(input) {
 		if (!part)
 			throw new Error("unexpected state");
 
-		if (!xs && importText && (0 !== pos || part.startsWith("/*"))) {
-			final.push("\nimport { TextEncoder, TextDecoder } from \"util\";");
-			importText = false;
+		if (imports.length && (0 !== pos || part.startsWith("/*"))) {
+			final.push(...imports);
+			imports = [];
 		}
 
 		try {
@@ -602,7 +602,7 @@ function compileDataView(input) {
 			}
 
 			if (part.startsWith("/*")) {
-				if (("header" === comments && pos == 1) || "all" === comments)
+				if (("header" === comments && pos == 1) || "true" === comments)
 					if (className)
 						output.push('   ' + part);
 					else
@@ -614,7 +614,25 @@ function compileDataView(input) {
 				let setting = parts[pos++];
 				if ("(" !== parts[pos++])
 					throw new Error(`open parenthesis expected`);
-				let value = parts[pos++];
+
+				let value = [];
+				let nest = 0;
+				while (true) {
+					const part = parts[pos++];
+					if ("\n" === part)
+						throw new Error(`unbalanced parenthesis`);
+					if ("(" === part)
+						nest++;
+					else if (")" === part) {
+						if (0 === nest) {
+							pos--;
+							break;
+						}
+						nest--;
+					}
+					value.push(part);
+				}
+				value = value.join(" ");
 
 				switch (setting) {
 					case "extends":
@@ -645,21 +663,21 @@ function compileDataView(input) {
 						pack = value;
 						break;
 
-					case "xs":
-						xs = booleanSetting(value, setting);
-						break;
+					case "language":
+						const languageParts = value.split('/');
+						if (languageParts.length < 1 || languageParts.length > 2)
+							throw new Error(`invalid language "${value}" specified; missing <language>{/<platform>}`);
 
-					case "target":
-						if ("xs" === value)
-							xs = true;
-						else if ("js" === value) {
-							xs = false;
-							importText = false;
-						} else if ("node" === value) {
-							xs = false;
-							importText = true;
-						} else 
-							throw new Error(`invalid target "${value}" specified`)
+						if (!["javascript", "typescript"].includes(languageParts[0]))
+							throw new Error(`invalid language "${value}" specified; language "${languageParts[0]}" unknown`);
+						if (2 == languageParts.length && !["xs", "node", "web"].includes(languageParts[1]))
+							throw new Error(`invalid language "${value}" specified; platform "${languageParts[1]}" unknown`);
+
+						language = languageParts[0];
+						platform = (2 == languageParts.length) ? languageParts[1] : "xs";
+
+						if ("typescript" === language && "node" === platform)
+							imports.push("import { TextEncoder, TextDecoder } from \"util\";");
 						break;
 							
 					case "set":
@@ -695,12 +713,8 @@ function compileDataView(input) {
 							throw new Error(`invalid bitfields "${value}" specified`);
 						break;
 
-					case "typescript":
-						language = booleanSetting(value, setting) ? "typescript" : "javascript";
-						break;
-
 					case "comments":
-						if (!["none", "header", "all"].includes(value))
+						if (!["header", "false", "true"].includes(value))
 							throw new Error(`invalid comments "${value}" specified`);
 						comments = value;
 						break;
@@ -713,9 +727,7 @@ function compileDataView(input) {
 						break;
 
 					case "import":
-						if (className)
-							throw new Error(`import invalid inside statements`);
-						output.push(`import ${value};`);
+						imports.push(`import ${value};`);
 						break;
 	
 					default:
@@ -925,7 +937,7 @@ function compileDataView(input) {
 						if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      return String.fromCharCode(this.getUint8(${byteOffset}));`);
 						else {
-							if (xs)
+							if ("xs" === platform)
 								output.push(`      return String.fromArrayBuffer(this.buffer.slice(this.byteOffset + ${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
 							else
 								output.push(`      return new TextDecoder().decode(this.buffer.slice(this.byteOffset + ${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
@@ -942,7 +954,7 @@ function compileDataView(input) {
 						if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      this.setUint8(${byteOffset}, value.charCodeAt(0));`);
 						else {
-							if (xs)
+							if ("xs" === platform)
 								output.push(`      const j = new Uint8Array(ArrayBuffer.fromString(value));`);
 							else
 								output.push(`      const j = new TextEncoder().encode(value);`);
@@ -1078,8 +1090,8 @@ function compileDataView(input) {
 	return {
 		script: final.join("\n"),
 		errors: errors.join("\n"),
-		target: ("typescript" === language) ? 'ts' : 'js',
-		language
+		language: ("typescript" === language) ? 'ts' : 'js',
+		platform
 	}
 }
 globalThis.compileDataView = compileDataView;
