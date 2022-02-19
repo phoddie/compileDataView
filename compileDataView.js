@@ -98,7 +98,6 @@ let anonymousUnion;
 let json;
 let bitfieldsLSB;
 let comments;
-let implementsInterfaces;
 let header;
 let usesText;
 
@@ -143,6 +142,9 @@ function endField(byteCount) {
 
 function validateName(name) {
 	//@@ naive
+	const c = name.charCodeAt(0);
+	if ((48 <= c) && (c < 58))
+		throw new Error(`invalid name "${name}"`);		
 	if (name.includes(";") || name.includes("+")  || name.includes("-") || name.includes(".") || name.includes("&"))
 		throw new Error(`invalid name "${name}"`);
 
@@ -358,7 +360,6 @@ function compileDataView(input) {
 	json = false;
 	bitfieldsLSB = true;
 	comments = "header";
-	implementsInterfaces = "";
 	header = "";
 	usesText = false;
 
@@ -479,10 +480,7 @@ function compileDataView(input) {
 				output.push(``);
 
 				const start = new Output;
-				if (implementsInterfaces)
-					start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} implements ${implementsInterfaces} {`);
-				else
-					start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
+				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
 				if (outputByteLength) {
 					start.push(`   static byteLength = ${byteOffset};`);
 					start.push(``);
@@ -638,7 +636,7 @@ function compileDataView(input) {
 
 				switch (setting) {
 					case "extends":
-						extendsClass = validateName(value);
+						extendsClass = value ? validateName(value) : "DataView"
 						break;
 
 					case "endian":
@@ -719,13 +717,6 @@ function compileDataView(input) {
 						if (!["header", "false", "true"].includes(value))
 							throw new Error(`invalid comments "${value}" specified`);
 						comments = value;
-						break;
-
-					case "implements":
-						if ("none" === value)
-							implementsInterfaces = undefined;
-						else
-							implementsInterfaces = validateName(value);
 						break;
 
 					case "import":
