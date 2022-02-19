@@ -38,7 +38,7 @@ if (compileResults.errors) {
     compileResults.script = compileResults.errors.concat(compileResults.script);
 }
 
-const targetPath = (process.argv.length > 3) ? process.argv[3] : path.format({ ...path.parse(sourcePath), base: '', ext: `.${compileResults.target}` });
+const targetPath = (process.argv.length > 3) ? process.argv[3] : path.format({ ...path.parse(sourcePath), base: '', ext: `.${compileResults.language}` });
 fs.writeFileSync(targetPath, compileResults.script, { encoding: 'utf-8' });
 
 process.exit(compileResults.errors ? 1 : 0);

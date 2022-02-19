@@ -447,10 +447,25 @@ Pragmas control how CompileDataView generates code for properties. All pragmas a
 
 Pragmas can be changed in mid-file. For example, changing the `endian` pragma, which controls how multi-byte numbers are stored, allows CompileDataView to support obscure data structures that have both big-endian and little-endian values.
 
+The following pragmas are available (first option is the default):
+- [`bitfields(lsb | msb`](#bitfields)
+- [`checkByteLength(true | false)`](#checkbytelength)
+- [`comments(header | false | true)`](#comments)
+- [`endian(little | big)`](#endian)
+- [`export(true, false)`](#export)
+- [`extends(DataView | <custom>)`](#extends)
+- [`get(true | false)` and `set(true | false)`](#get-and-set)
+- [`implements(none | <custom>`)](#implements)
+- [`import(<import syntax>)`](#import)
+- [`json(false | true)`](#json)
+- [`language('javascript/xs' | <javascript | typescript>{/<xs | web | node>})`](#language)
+- [`outputByteLength(false | true)`](#outputbytelength)
+- [`pack(16 | 8 | 4 | 2 | 1)`](#pack)
+
 #### `extends`
 The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
 
-```
+```c
 #pragma extends(CustomDataView)
 ```
 
@@ -565,10 +580,17 @@ let f = new Misaligned;
 f.data[1] = 3;
 ```
 
-#### `xs`
-The `xs` property controls whether CompileDataView generates code targeting the XS JavaScript engine. The default value is `true`. The only difference in generated code is for string (character array) properties, where CompileDataView uses `String.fromArrayBuffer` and `ArrayBuffer.fromString` in place of `TextDecoder` and `TextEncoder` of the web platform.
+#### `language`
+The `language` property controls the language that the generated code is targeting.  The languages are currently supported are `javascript` and `typescript`.  Each of these optionally accept a platform of `xs`, `node` and `web`, with the default being `xs`.  The syntax is:
 
-At this time there is no option to generate code for strings that works for both XS and the web platform, though it is possible.
+`<language>{/<platform>}`
+
+For example, to use JavaScript on XS, use `javascript` or `javascript/xs` (which is the default).  To target TypeScript for Node, use `typescript/node`.
+
+The differences are small between the platforms:
+* `xs` (default): Uses `String.fromArrayBuffer` and `ArrayBuffer.fromString` for string to/from buffers (replaces `#pragma xs(true)`).
+* `web`: Uses `TextEncoder` and `TextDecoder` for string to/from buffers (replaces `#pragma xs(false)`).
+* `node`: Same as `web`, except also provides the required imports `import { TextEncoder, TextDecoder } from "util" };`.
 
 #### `outputByteLength`
 The `outputByteLength` pragma controls whether CompileDataView includes a static `byteLength` property in the generated class with the number of bytes used by the native data structure. Defaults to `false`.
@@ -606,9 +628,51 @@ let i = IntroView.from({
 #### `bitfields`
 The `bitfields ` pragma controls whether bitfields are stored in the least or most significant unused bits. The default is `"lsb"` to store bitfields in the least significant unused bits. To store bitfields in the most significant unused bits instead, use `"msb"`. 
 
-#### `typescript`
-The `typescript` pragma controls if the output format should include typing for TypeScript.  The default is `false`. 
+#### `comments`
+The `comments` pragma controls how block (`/* ... */`) comments are injected into the output.  Options are `false` (no comments), `header` (default; include only the header block comment, which must start on the first line of the file) and `true` (include all block comments).  Line comments (`// ...`) are never injected.  This can be changed throughout the file. 
 
+#### `implements`
+The `implements` pragma adds `implements` to the class definition, in addition to `extends`.  Stays enabled for all remaining classes, but can be disabled with `none`.  See [`import`](#import) for importing the type definition for the interface.  For example,
+
+```c
+#pragma implements(MyInterface)
+struct FirstExample {
+   ...
+};
+#pragma implement(none)
+struct SecondExample {
+   ...
+};
+```
+
+generates the following:
+
+```js
+class FirstExample extends DataView implements MyInterface {
+   ...
+}
+
+class SecondExample extends DataView {
+   ...
+}
+```
+
+#### `import`
+The `import` pragma injects an import for pulling in modules and TypeScript type definitions.  The parameter specifies the body of the import statement.  Multiple imports can be specified by using the pragma multiple times.  For example,
+
+```c
+#pragma import("./MyInterface")
+#pragma import({ myMethod } from "./MyClass")
+```
+
+will generate:
+
+```js
+import "./MyInterface";
+import { myMethod } from "./MyClass";
+```
+
+Imports may be placed anywhere in the content, but will always be injected at the top of the file (after the first comment if provided).
 
 <a id="past-future"></a>
 ## Past and future

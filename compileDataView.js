@@ -81,12 +81,13 @@ let fromOutput;
 let byteOffset;
 let littleEndian;
 let language;
+let platform;
 let doSet;
 let doGet;
 let doExport;
 let pack;
 let extendsClass;
-let xs;
+let imports;
 let outputByteLength;
 let checkByteLength;
 let union;
@@ -96,6 +97,8 @@ let classAlign;
 let anonymousUnion;
 let json;
 let bitfieldsLSB;
+let comments;
+let implementsInterfaces;
 
 class Output extends Array {
 	add(line) {
@@ -168,6 +171,8 @@ splitLoop:
 						error = `unterminated comment, line ${line}`;
 						break splitLoop;
 					}
+					parts.push(`/${source.slice(i, endComment)}*/`);
+					map.push(line);
 					line += source.slice(i, endComment).split("\n").length - 1;
 					i = endComment + 1;		// with ++ in for loop, this gives next character
 					continue splitLoop;
@@ -334,12 +339,13 @@ function compileDataView(input) {
 	byteOffset = 0;
 	littleEndian = true;
 	language = "javascript";
+	platform = "xs";
 	doSet = true;
 	doGet = true;
 	doExport = true;
 	pack = kDefaultPack;
 	extendsClass = "DataView";
-	xs = true;
+	imports = [];
 	outputByteLength = false;
 	checkByteLength = true;
 	union = undefined;
@@ -349,6 +355,8 @@ function compileDataView(input) {
 	anonymousUnion = false;
 	json = false;
 	bitfieldsLSB = true;
+	comments = "header";
+	implementsInterfaces = "";
 
 	let final = [];
 	const errors = [];
@@ -364,6 +372,11 @@ function compileDataView(input) {
 		const part = parts[pos++];
 		if (!part)
 			throw new Error("unexpected state");
+
+		if (imports.length && (0 !== pos || part.startsWith("/*"))) {
+			final.push(...imports);
+			imports = [];
+		}
 
 		try {
 			let bitCount, arrayCount;
@@ -407,7 +420,7 @@ function compileDataView(input) {
 					}
 					output.add({
 						javascript: `});`,
-						typescript: `};`,
+						typescript: `}`,
 					});
 					output.push(``);
 
@@ -467,7 +480,10 @@ function compileDataView(input) {
 				output.push(``);
 
 				const start = new Output;
-				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
+				if (implementsInterfaces)
+					start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} implements ${implementsInterfaces} {`);
+				else
+					start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
 				if (outputByteLength) {
 					start.push(`   static byteLength = ${byteOffset};`);
 					start.push(``);
@@ -476,7 +492,7 @@ function compileDataView(input) {
 				const limit = checkByteLength ? `, ${byteOffset}` : "";
 				start.add({
 					javascript: `   constructor(data, offset) {`,
-					typescript: `   constructor(data?: ArrayBuffer, offset?: number) {`
+					typescript: `   constructor(data?: ArrayBufferLike, offset?: number) {`
 				});
 				start.push(`      if (data)`);
 				start.push(`         super(data, offset ?? 0${limit});`);
@@ -585,11 +601,38 @@ function compileDataView(input) {
 				continue;
 			}
 
+			if (part.startsWith("/*")) {
+				if (("header" === comments && pos == 1) || "true" === comments)
+					if (className)
+						output.push('   ' + part);
+					else
+						final.push(part);
+				continue;
+			}
+
 			if ("#pragma" === part) {
 				let setting = parts[pos++];
 				if ("(" !== parts[pos++])
 					throw new Error(`open parenthesis expected`);
-				let value = parts[pos++];
+
+				let value = [];
+				let nest = 0;
+				while (true) {
+					const part = parts[pos++];
+					if ("\n" === part)
+						throw new Error(`unbalanced parenthesis`);
+					if ("(" === part)
+						nest++;
+					else if (")" === part) {
+						if (0 === nest) {
+							pos--;
+							break;
+						}
+						nest--;
+					}
+					value.push(part);
+				}
+				value = value.join(" ");
 
 				switch (setting) {
 					case "extends":
@@ -620,10 +663,23 @@ function compileDataView(input) {
 						pack = value;
 						break;
 
-					case "xs":
-						xs = booleanSetting(value, setting);
-						break;
+					case "language":
+						const languageParts = value.split('/');
+						if (languageParts.length < 1 || languageParts.length > 2)
+							throw new Error(`invalid language "${value}" specified; missing <language>{/<platform>}`);
 
+						if (!["javascript", "typescript"].includes(languageParts[0]))
+							throw new Error(`invalid language "${value}" specified; language "${languageParts[0]}" unknown`);
+						if (2 == languageParts.length && !["xs", "node", "web"].includes(languageParts[1]))
+							throw new Error(`invalid language "${value}" specified; platform "${languageParts[1]}" unknown`);
+
+						language = languageParts[0];
+						platform = (2 == languageParts.length) ? languageParts[1] : "xs";
+
+						if ("typescript" === language && "node" === platform)
+							imports.push("import { TextEncoder, TextDecoder } from \"util\";");
+						break;
+							
 					case "set":
 						doSet = booleanSetting(value, setting);
 						break;
@@ -657,8 +713,21 @@ function compileDataView(input) {
 							throw new Error(`invalid bitfields "${value}" specified`);
 						break;
 
-					case "typescript":
-						language = booleanSetting(value, setting) ? "typescript" : "javascript";
+					case "comments":
+						if (!["header", "false", "true"].includes(value))
+							throw new Error(`invalid comments "${value}" specified`);
+						comments = value;
+						break;
+
+					case "implements":
+						if ("none" === value)
+							implementsInterfaces = undefined;
+						else
+							implementsInterfaces = validateName(value);
+						break;
+
+					case "import":
+						imports.push(`import ${value};`);
 						break;
 	
 					default:
@@ -868,7 +937,7 @@ function compileDataView(input) {
 						if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      return String.fromCharCode(this.getUint8(${byteOffset}));`);
 						else {
-							if (xs)
+							if ("xs" === platform)
 								output.push(`      return String.fromArrayBuffer(this.buffer.slice(this.byteOffset + ${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
 							else
 								output.push(`      return new TextDecoder().decode(this.buffer.slice(this.byteOffset + ${byteOffset}, this.byteOffset + ${byteOffset + arrayCount}));`);
@@ -885,7 +954,7 @@ function compileDataView(input) {
 						if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      this.setUint8(${byteOffset}, value.charCodeAt(0));`);
 						else {
-							if (xs)
+							if ("xs" === platform)
 								output.push(`      const j = new Uint8Array(ArrayBuffer.fromString(value));`);
 							else
 								output.push(`      const j = new TextEncoder().encode(value);`);
@@ -1021,8 +1090,8 @@ function compileDataView(input) {
 	return {
 		script: final.join("\n"),
 		errors: errors.join("\n"),
-		target: ("typescript" === language) ? 'ts' : 'js',
-		language
+		language: ("typescript" === language) ? 'ts' : 'js',
+		platform
 	}
 }
 globalThis.compileDataView = compileDataView;
