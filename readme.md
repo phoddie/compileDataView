@@ -163,7 +163,7 @@ There are several ways to use the generated classes in your scripts.
 You can create a new a new instance of the record which allocates the memory for the view and initializes all values to zero. You don't need to pass any arguments as the class knows the size of the data structure.
 
 ```js
-let record= new IntroView;
+let record = new IntroView;
 ```
 
 You can then set and get the properties you defined.
