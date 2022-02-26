@@ -27,6 +27,8 @@
 
 */
 
+const Version = 1;
+
 const byteCounts = {
 	Int8: 1,
 	Int16: 2,
@@ -771,7 +773,7 @@ function compileDataView(input) {
 								return "defined" !== property;
 							},
 							get(target, property) {
-								return ("__COMPILEDATAVIEW__" === property) ? true : undefined;
+								return ("__COMPILEDATAVIEW__" === property) ? ${Version} : undefined;
 							}
 						});
 						const defined = function(t) {return undefined !== t};
@@ -783,7 +785,7 @@ function compileDataView(input) {
 					const type = typeof active;
 					if (("boolean" !== type) && ("number" !== type))
 						throw new Error(`invalid value for ${expression}`);
-					conditionals.push({active});
+					conditionals.push({active: !!active});
 				}
 
 				pos = end + 1;
@@ -811,6 +813,10 @@ function compileDataView(input) {
 				if (-1 !== end)
 					pos = end + 1;
 				continue;
+			}
+			if ("#error" === part) {
+				const end = parts.indexOf("\n", pos);
+				throw new Error(parts.slice(pos, (end < 0) ? parts.length : end).join(" "))
 			}
 
 			if (part.startsWith("#"))
@@ -1143,6 +1149,9 @@ function compileDataView(input) {
 			errors.push(`   ${e}, line ${map[pos]}: ${lines[map[pos] - 1]}`);
 		}
 	}
+
+	if (conditionals.length > 1)
+		errors.push(`   missing #endif`);
 
 	if (className)
 		errors.push(`   incomplete struct at end of file`);

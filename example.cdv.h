@@ -1,10 +1,12 @@
 /**
    Header comment by default is included
 */
-#pragma comments(true)              // include all block comments
-#pragma json(true)                  // include JSON methods
-#pragma language(typescript/node)   // use TypeScript with Node style string buffers
-#pragma import({ MyInterface } from "./MyInterface")     // generates "import { MyInterface } from "./MyInterface" to get interfaces types
+#if defined(__COMPILEDATAVIEW)
+   #pragma comments(true)              // include all block comments
+   #pragma json(true)                  // include JSON methods
+   #pragma language(typescript/node)   // use TypeScript with Node style string buffers
+   #pragma import({ MyInterface } from "./MyInterface")     // generates "import { MyInterface } from "./MyInterface" to get interfaces types
+#endif
 
 // Line comments are always ignored
 

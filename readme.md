@@ -2,7 +2,7 @@
 
 Copyright 2021-2022 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: February 19, 2022
+Revised: February 26, 2022
 
 ## Table of Contents
 
@@ -27,6 +27,7 @@ Revised: February 19, 2022
     - [String](#type-string)
     - [Nested types](#type-nested)
   - [Configuring CompileDataView using pragmas](#pragmas)
+  - [Conditional Compilation](#if-else-endif)
 - [Past and future](#past-future)
 - [Acknowledgements](#acknowledgements)
 - [Contact](#contact)
@@ -448,6 +449,7 @@ Pragmas control how CompileDataView generates code for properties. All pragmas a
 Pragmas can be changed in mid-file. For example, changing the `endian` pragma, which controls how multi-byte numbers are stored, allows CompileDataView to support obscure data structures that have both big-endian and little-endian values.
 
 The following pragmas are available (first option is the default):
+
 - [`bitfields(lsb | msb`](#bitfields)
 - [`checkByteLength(true | false)`](#checkbytelength)
 - [`comments(header | false | true)`](#comments)
@@ -665,6 +667,26 @@ import { myMethod } from "./MyClass";
 ```
 
 Imports may be placed anywhere in the content, but will always be injected at the top of the file (after the first comment if provided).
+
+<a id="if-else-endif"></a>
+## Conditional Compilation
+CompileDataView implements a subset of the C preprocessor `#if`, `#else` and `#endif` directives. These are supported primarily to allow a header file to be safely shared between C compilers and CompileDataView. A typical use is to conditionalize `#pragma` directives unique to CompileDataView:
+
+```
+#if defined(__COMPILEDATAVIEW__)
+   #pragma language(typescript)
+#endif
+```
+
+`__COMPILEDATAVIEW__` is defined to be a positive integer containing the version number of CompileDataView.
+
+```
+#if __COMPILEDATAVIEW__ > 0
+   #pragma json(true)
+#endif
+```
+
+Nested `#if` directives are supported.
 
 <a id="past-future"></a>
 ## Past and future

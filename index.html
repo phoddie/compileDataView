@@ -19,8 +19,10 @@ textarea {
 
 <script>
 const defaultDescription =
-`#pragma language(javascript/xs)
-#pragma json(true)
+`#if defined(__COMPILEDATAVIEW__)
+   #pragma language(javascript/xs)
+   #pragma json(true)
+#endif
 
 struct Integers {
    uint16_t size;
