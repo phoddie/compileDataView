@@ -100,6 +100,7 @@ let bitfieldsLSB;
 let comments;
 let header;
 let usesText;
+let conditionals;
 
 class Output extends Array {
 	add(line) {
@@ -194,16 +195,30 @@ splitLoop:
 			case "+":
 			case "-":
 			case "^":
-			case "|":
-			case "&":
 			case "!":
 			case ",":
-			case "=":
 				if (part) {
 					parts.push(part);
 					map.push(line);
 				}
 				parts.push(c);
+				map.push(line);
+				part = "";
+				break;
+
+			case "|":
+			case "&":
+			case "=":
+				if (part) {
+					parts.push(part);
+					map.push(line);
+				}
+				if (c === source[i + 1]) {
+					parts.push(c + c);
+					i += 1;
+				}
+				else
+					parts.push(c);
 				map.push(line);
 				part = "";
 				break;
@@ -362,6 +377,7 @@ function compileDataView(input) {
 	comments = "header";
 	header = "";
 	usesText = false;
+	conditionals = [{active: true, else: true}];
 
 	let final = [];
 	const errors = [];
@@ -380,6 +396,11 @@ function compileDataView(input) {
 
 		try {
 			let bitCount, arrayCount;
+
+			if (!conditionals[conditionals.length - 1].active) {
+				if (("#if" !== part) && ("#else" !== part) && ("#endif" !== part))
+					continue;
+			}
 
 			if ("}" == part) {
 				if (!className)
@@ -734,6 +755,61 @@ function compileDataView(input) {
 				if ("\n" !== parts[pos++])
 					throw new Error(`end of line expected`);
 
+				continue;
+			}
+			if ("#if" === part) {
+				const end = parts.indexOf("\n", pos);
+				if (-1 == end)
+					throw new Error(`syntax error`);
+				if (!conditionals[conditionals.length - 1].active)
+					conditionals.push({active: false});
+				else {
+					const expression = parts.slice(pos, end).join(" ");
+					let f = new Function(`
+						const p = new Proxy({}, {
+							has(target, property) {
+								return "defined" !== property;
+							},
+							get(target, property) {
+								return ("__COMPILEDATAVIEW__" === property) ? true : undefined;
+							}
+						});
+						const defined = function(t) {return undefined !== t};
+						with (p) {
+							return ${expression};
+						}
+						`);
+					const active = f() ?? false;
+					const type = typeof active;
+					if (("boolean" !== type) && ("number" !== type))
+						throw new Error(`invalid value for ${expression}`);
+					conditionals.push({active});
+				}
+
+				pos = end + 1;
+				continue;
+			}
+			if ("#else" === part) {
+				if ((conditionals.length < 2) || conditionals[conditionals.length - 1].else)
+					throw new Error(`unmatched #else`);
+				if (conditionals[conditionals.length - 2].active) {
+					conditionals[conditionals.length - 1].active = !conditionals[conditionals.length - 1].active;
+					conditionals[conditionals.length - 1].else = true;
+				}
+
+				const end = parts.indexOf("\n", pos);
+				if (-1 !== end)
+					pos = end + 1;
+				continue;
+			}
+			if ("#endif" === part) {
+				if (conditionals.length < 2)
+					throw new Error(`unmatched #endif`);
+				conditionals.pop();
+
+				const end = parts.indexOf("\n", pos);
+				if (-1 !== end)
+					pos = end + 1;
 				continue;
 			}
 
