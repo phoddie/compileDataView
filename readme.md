@@ -26,6 +26,7 @@ Revised: February 26, 2022
     - [Character](#type-character)
     - [String](#type-string)
     - [Nested types](#type-nested)
+  - [Enumerations](#enum)
   - [Configuring CompileDataView using pragmas](#pragmas)
   - [Conditional Compilation](#if-else-endif)
 - [Past and future](#past-future)
@@ -441,6 +442,46 @@ r.bottomRight.y += 5;
 ```
 
 Like numeric arrays, getting the value of a nested type returns a new instance of the view referencing the original data. Therefore, it is similarly recommended to reuse the returned instance when practical.
+
+<a id="enum"></a>
+### Enumerations
+CompileDataView supports `enum`. Expressions may be used to assign enumeration values.
+
+```c
+enum Values {
+   zero,
+   one,
+   three = 3
+};
+enum Masks {
+   a = 1 << 31,
+   b = 0x00FF0000
+};
+```
+
+In JavaScript, the enumeration values are accessed through the enumeration name:
+
+```js
+trace(Values.three, "\n");
+trace(Masks.a, "\n");
+```
+
+The `enum` expressions implements some behaviors incompatible with C by supporting floating point, string, and boolean values and expressions that reference enumeration values. These are convenient in some situations.
+
+```c
+enum Zero {
+   string = "0",
+   almost = 0.001,
+   isZero = true
+};
+
+enum PowersOfTwo {
+   zero = 1,
+   one = zero << 1,
+   two = one ** 2,
+   isZero = !Zero.isZero
+};
+```
 
 <a id="pragmas"></a>
 ### Configuring CompileDataView using pragmas

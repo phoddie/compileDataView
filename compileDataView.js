@@ -186,6 +186,24 @@ splitLoop:
 				}
 				// fall through to handle "*" as separate part
 
+			case "|":
+			case "&":
+			case "=":
+				if (part) {
+					parts.push(part);
+					map.push(line);
+				}
+				if (c === source[i + 1]) {
+					parts.push(c + c);
+					i += 1;
+				}
+				else
+					parts.push(c);
+				map.push(line);
+				part = "";
+				break;
+
+
 			case "{":
 			case "}":
 			case ":":
@@ -204,23 +222,6 @@ splitLoop:
 					map.push(line);
 				}
 				parts.push(c);
-				map.push(line);
-				part = "";
-				break;
-
-			case "|":
-			case "&":
-			case "=":
-				if (part) {
-					parts.push(part);
-					map.push(line);
-				}
-				if (c === source[i + 1]) {
-					parts.push(c + c);
-					i += 1;
-				}
-				else
-					parts.push(c);
 				map.push(line);
 				part = "";
 				break;
