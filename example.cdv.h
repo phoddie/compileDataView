@@ -1,11 +1,10 @@
 /**
    Header comment by default is included
 */
-#if defined(__COMPILEDATAVIEW)
+#if defined(__COMPILEDATAVIEW__)
    #pragma comments(true)              // include all block comments
    #pragma json(true)                  // include JSON methods
    #pragma language(typescript/node)   // use TypeScript with Node style string buffers
-   #pragma import({ MyInterface } from "./MyInterface")     // generates "import { MyInterface } from "./MyInterface" to get interfaces types
 #endif
 
 // Line comments are always ignored
@@ -21,7 +20,11 @@ enum Masks {
    Because "#pragma comments(true)" is enabled, this block comment
    will be included in the output
 */
-#pragma implements(MyInterface)     // implements "MyInterface"
+#if defined(__COMPILEDATAVIEW__)
+	#pragma import({ MyIntegers } from "./MyIntegers" implements MyIntegers)     // generates "import { MyIntegers } from "./MyIntegers" to get interfaces types
+	#pragma extends(MyInterface)
+#endif
+
 struct Integers {
    /* block comments also work here */
    uint16_t size;
@@ -34,7 +37,11 @@ struct Integers {
    uint8_t uuid[16];
 };
 
-#pragma comments(false)      // all block comments will be ignored from here down
+#if defined(__COMPILEDATAVIEW__)
+	#pragma extends()    // disable extends for remaining
+	#pragma comments(false)      // all block comments will be ignored from here down
+#endif
+
 /*
    This comment is ignored
 */
@@ -60,7 +67,6 @@ struct BooleansAndBitFields {
    uint32_t yrr:4;
 };
 
-#pragma implements(none)    // disable implements for remaining
 
 struct FloatAndBigInts {
    float f32;
