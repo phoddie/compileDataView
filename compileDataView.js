@@ -103,6 +103,7 @@ let comments;
 let header;
 let usesText;
 let conditionals;
+let final;
 
 class Output extends Array {
 	add(line) {
@@ -202,7 +203,6 @@ splitLoop:
 				map.push(line);
 				part = "";
 				break;
-
 
 			case "{":
 			case "}":
@@ -348,9 +348,105 @@ function flushBitfields(bitsToAdd = 32) {
 	endField(byteCount);
 }
 
+function setPragma(setting, value) {
+	switch (setting) {
+		case "extends":
+			extendsClass = value ? validateName(value) : "DataView"
+			break;
+
+		case "endian":
+			if ("little" === value)
+				littleEndian = true;
+			else if ("big" === value)
+				littleEndian = false;
+			else
+				throw new Error(`invalid endian "${value}" specified`);
+			break;
+
+		case "pack":
+			if (")" === value) {
+				value =  kDefaultPack;
+				pos -= 1;
+			}
+			else {
+				value = parseInt(value);
+				if (0 === value)
+					value = kDefaultPack;
+				if (![1, 2, 4, 8, 16].includes(value))
+					throw new Error(`invalid pack`);
+			}
+			pack = value;
+			break;
+
+		case "language":
+			if (output.length || final.length || className)
+				throw new Error("too late to set language");
+
+			const languageParts = value.split('/');
+			if (languageParts.length < 1 || languageParts.length > 2)
+				throw new Error(`invalid language "${value}" specified; missing <language>{/<platform>}`);
+
+			if (!["javascript", "typescript"].includes(languageParts[0]))
+				throw new Error(`invalid language "${value}" specified; language "${languageParts[0]}" unknown`);
+			if (2 == languageParts.length && !["xs", "node", "web"].includes(languageParts[1]))
+				throw new Error(`invalid language "${value}" specified; platform "${languageParts[1]}" unknown`);
+
+			language = languageParts[0];
+			platform = languageParts[1] ?? "xs";
+			break;
+
+		case "set":
+			doSet = booleanSetting(value, setting);
+			break;
+
+		case "get":
+			doGet = booleanSetting(value, setting);
+			break;
+
+		case "export":
+			doExport = booleanSetting(value, setting);
+			break;
+
+		case "outputByteLength":
+			outputByteLength = booleanSetting(value, setting);
+			break;
+
+		case "checkByteLength":
+			checkByteLength = booleanSetting(value, setting);
+			break;
+
+		case "json":
+			json = booleanSetting(value, setting);
+			break;
+
+		case "bitfields":
+			if ("lsb" === value)
+				bitfieldsLSB = true;
+			else if ("msb" === value)
+				bitfieldsLSB = false;
+			else
+				throw new Error(`invalid bitfields "${value}" specified`);
+			break;
+
+		case "comments":
+			if (!["header", "false", "true"].includes(value))
+				throw new Error(`invalid comments "${value}" specified`);
+			comments = value;
+			break;
+
+		case "import":
+			imports.push(`import ${value};`);
+			break;
+
+		default:
+			throw new Error(`unknown pragma "${setting}"`);
+			break;
+	}
+}
+
 const kDefaultPack = 16;
 
-function compileDataView(input) {
+function compileDataView(input, pragmas = {}) {
 	className = undefined;
 	output = new Output;
 	properties = [];
@@ -382,7 +478,7 @@ function compileDataView(input) {
 	usesText = false;
 	conditionals = [{active: true, else: true}];
 
-	let final = [];
+	final = [];
 	const errors = [];
 	const lines = input.split("\n");
 
@@ -391,6 +487,9 @@ function compileDataView(input) {
 		errors.push(`   ${error}`);
 		parts.length = 0;
 	}
+
+	for (const name in pragmas)
+		setPragma(name, pragmas[name]);
 
 	for (let pos = 0; pos < parts.length; ) {
 		const part = parts[pos++];
@@ -657,100 +756,8 @@ function compileDataView(input) {
 					value.push(part);
 				}
 				value = value.join(" ");
-
-				switch (setting) {
-					case "extends":
-						extendsClass = value ? validateName(value) : "DataView"
-						break;
-
-					case "endian":
-						if ("little" === value)
-							littleEndian = true;
-						else if ("big" === value)
-							littleEndian = false;
-						else
-							throw new Error(`invalid endian "${value}" specified`);
-						break;
-
-					case "pack":
-						if (")" === value) {
-							value =  kDefaultPack;
-							pos -= 1;
-						}
-						else {
-							value = parseInt(value);
-							if (0 === value)
-								value = kDefaultPack;
-							if (![1, 2, 4, 8, 16].includes(value))
-								throw new Error(`invalid pack`);
-						}
-						pack = value;
-						break;
-
-					case "language":
-						if (output.length || final.length || className)
-							throw new Error("too late to set language");
-
-						const languageParts = value.split('/');
-						if (languageParts.length < 1 || languageParts.length > 2)
-							throw new Error(`invalid language "${value}" specified; missing <language>{/<platform>}`);
-
-						if (!["javascript", "typescript"].includes(languageParts[0]))
-							throw new Error(`invalid language "${value}" specified; language "${languageParts[0]}" unknown`);
-						if (2 == languageParts.length && !["xs", "node", "web"].includes(languageParts[1]))
-							throw new Error(`invalid language "${value}" specified; platform "${languageParts[1]}" unknown`);
-
-						language = languageParts[0];
-						platform = languageParts[1] ?? "xs";
-						break;
-
-					case "set":
-						doSet = booleanSetting(value, setting);
-						break;
-
-					case "get":
-						doGet = booleanSetting(value, setting);
-						break;
-
-					case "export":
-						doExport = booleanSetting(value, setting);
-						break;
-
-					case "outputByteLength":
-						outputByteLength = booleanSetting(value, setting);
-						break;
-
-					case "checkByteLength":
-						checkByteLength = booleanSetting(value, setting);
-						break;
-
-					case "json":
-						json = booleanSetting(value, setting);
-						break;
-
-					case "bitfields":
-						if ("lsb" === value)
-							bitfieldsLSB = true;
-						else if ("msb" === value)
-							bitfieldsLSB = false;
-						else
-							throw new Error(`invalid bitfields "${value}" specified`);
-						break;
-
-					case "comments":
-						if (!["header", "false", "true"].includes(value))
-							throw new Error(`invalid comments "${value}" specified`);
-						comments = value;
-						break;
-
-					case "import":
-						imports.push(`import ${value};`);
-						break;
-	
-					default:
-						throw new Error(`unknown pragma "${setting}"`);
-						break;
-				}
+				
+				setPragma(setting, value);
 
 				if (")" !== parts[pos++])
 					throw new Error(`close parenthesis expected`);
@@ -1186,4 +1193,4 @@ function compileDataView(input) {
 }
 globalThis.compileDataView = compileDataView;
 
-export default {};
+export default compileDataView;
