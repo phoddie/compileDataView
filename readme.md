@@ -26,6 +26,7 @@ Revised: February 26, 2022
     - [Character](#type-character)
     - [String](#type-string)
     - [Nested types](#type-nested)
+    - [Padding](#padding)
   - [Enumerations](#enum)
   - [Configuring CompileDataView using pragmas](#pragmas)
   - [Conditional Compilation](#if-else-endif)
@@ -442,6 +443,21 @@ r.bottomRight.y += 5;
 ```
 
 Like numeric arrays, getting the value of a nested type returns a new instance of the view referencing the original data. Therefore, it is similarly recommended to reuse the returned instance when practical.
+
+<a id="padding"></a>
+#### Padding
+CompileDataView automatically omits output of property names that begin with `__pad` so that unused padding fields in a data structure do not generate any code. For example, the following outputs code for the `value` and `id` fields only.
+
+```
+struct Key {
+	uint8_t __pad1[11];
+	uint8_t value;
+	uint8_t __pad2;
+	uint32_t id;
+};
+```
+
+> **Note**: This behavior deviates from standard C behavior. No pragma is provided to control it. It is straightforward to add, should it prove necessary.
 
 <a id="enum"></a>
 ### Enumerations

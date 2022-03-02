@@ -124,3 +124,11 @@ struct JavaScriptTypes {
 
    Boolean boo;
 };
+
+// padding
+struct Key {
+	uint8_t __pad1[11];
+	uint8_t value; 
+	uint8_t __pad2;
+	uint32_t id;
+};
