@@ -27,7 +27,7 @@
 
 */
 
-const Version = 1;
+const Version = 2;
 
 const byteCounts = {
 	Int8: 1,
@@ -40,6 +40,19 @@ const byteCounts = {
 	Float64: 8,
 	BigInt64: 8,
 	BigUint64: 8
+};
+
+const shiftCounts = {
+	Int8: 0,
+	Int16: 1,
+	Int32: 2,
+	Uint8: 0,
+	Uint16: 1,
+	Uint32: 2,
+	Float32: 2,
+	Float64: 3,
+	BigInt64: 3,
+	BigUint64: 3
 };
 
 const TypeAliases = {
@@ -74,6 +87,7 @@ const TypeScriptTypeAliases = {
 const isTypedef = Symbol("typedef");
 
 let className;
+let classUsesEndian;
 let output;
 let classes;
 let properties;
@@ -82,6 +96,8 @@ let jsonOutput;
 let fromOutput;
 let byteOffset;
 let littleEndian;
+let hostEndian
+let useEndian;	// = littleEndian ?? hostEndian
 let language;
 let platform;
 let doSet;
@@ -102,6 +118,7 @@ let bitfieldsLSB;
 let comments;
 let header;
 let usesText;
+let usesEndianProxy;
 let conditionals;
 let final;
 let paddingPrefix;
@@ -298,7 +315,7 @@ function flushBitfields(bitsToAdd = 32) {
 	else {
 		type = (total <= 16) ? "Uint16" : "Uint32";
 		byteCount = (total <= 16) ? 2 : 4;
-		endian = littleEndian ? ", true" : ", false";
+		endian = useEndian ? ", true" : ", false";
 	}
 
 	let bitsOutput = 0;
@@ -360,8 +377,28 @@ function setPragma(setting, value) {
 				littleEndian = true;
 			else if ("big" === value)
 				littleEndian = false;
+			else if ("host" === value)
+				littleEndian = undefined;
 			else
 				throw new Error(`invalid endian "${value}" specified`);
+
+			useEndian = littleEndian ?? hostEndian;
+			break;
+
+		case "hostEndian":
+			if (output.length || final.length || className)
+				throw new Error("too late to set hostEndian");
+
+			if ("little" === value)
+				hostEndian = true;
+			else if ("big" === value)
+				hostEndian = false;
+			else if ("unknown" === value)
+				hostEndian = undefined;
+			else
+				throw new Error(`invalid hostEndian "${value}" specified`);
+
+			useEndian = littleEndian ?? hostEndian;
 			break;
 
 		case "pack":
@@ -449,6 +486,7 @@ const kDefaultPack = 16;
 
 function compileDataView(input, pragmas = {}) {
 	className = undefined;
+	classUsesEndian = false;
 	output = new Output;
 	properties = [];
 	classes = {};
@@ -456,7 +494,9 @@ function compileDataView(input, pragmas = {}) {
 	jsonOutput = new Output;
 	fromOutput = new Output;
 	byteOffset = 0;
-	littleEndian = true;
+	littleEndian = undefined;
+	hostEndian = true;
+	useEndian = littleEndian ?? hostEndian
 	language = "javascript";
 	platform = "xs";
 	doSet = true;
@@ -477,6 +517,7 @@ function compileDataView(input, pragmas = {}) {
 	comments = "header";
 	header = "";
 	usesText = false;
+	usesEndianProxy = false;
 	conditionals = [{active: true, else: true}];
 	paddingPrefix = "__pad";
 
@@ -560,6 +601,7 @@ function compileDataView(input, pragmas = {}) {
 
 					enumState = undefined;
 					className = undefined;
+					classUsesEndian = false;
 					continue;
 				}
 
@@ -606,10 +648,14 @@ function compileDataView(input, pragmas = {}) {
 
 				const start = new Output;
 				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
-				if (outputByteLength) {
+				if (outputByteLength)
 					start.push(`   static byteLength = ${byteOffset};`);
+
+				if (classUsesEndian)
+					start.push(`   #endian;`);
+
+				if (outputByteLength || classUsesEndian)
 					start.push(``);
-				}
 
 				const limit = checkByteLength ? `, ${byteOffset}` : "";
 				start.add({
@@ -620,6 +666,11 @@ function compileDataView(input, pragmas = {}) {
 				start.push(`         super(data, offset ?? 0${limit});`);
 				start.push(`       else`);
 				start.push(`         super(new ArrayBuffer(${byteOffset}));`);
+				if (classUsesEndian) {
+					start.push(`      this.setUint8(0, 1);`);
+					start.push(`      this.#endian = 1 === this.getUint16(0, true);`);
+					start.push(`      this.setUint8[0] = 0;`);
+				}
 				start.push(`   }`);
 
 				final = final.concat(start, output);
@@ -963,11 +1014,22 @@ function compileDataView(input, pragmas = {}) {
 						if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      return this.get${type}(${byteOffset});`);
-							else
-								output.push(`      return this.get${type}(${byteOffset}, ${littleEndian});`);
+							else {
+								if (undefined !== useEndian)
+									output.push(`      return this.get${type}(${byteOffset}, ${useEndian});`);
+								else {
+									output.push(`      return this.get${type}(${byteOffset}, this.#endian);`);
+									classUsesEndian = true;
+								}
+							}
 						}
 						else {
-							output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
+							if ((1 === byteCount) || (hostEndian === useEndian))
+								output.push(`      return new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
+							else {
+								output.push(`      return new EndianArray(${useEndian}, ${shiftCounts[type]}, DataView.prototype.get${type}, DataView.prototype.set${type}, this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount});`);
+								usesEndianProxy = true;
+							}
 						}
 						output.push(`   }`);
 					}
@@ -981,15 +1043,25 @@ function compileDataView(input, pragmas = {}) {
 						if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      this.set${type}(${byteOffset}, value);`);
-							else
-								output.push(`      this.set${type}(${byteOffset}, value, ${littleEndian});`);
+							else {
+								if (undefined !== useEndian)
+									output.push(`      this.set${type}(${byteOffset}, value, ${useEndian});`);
+								else {
+									output.push(`      this.set${type}(${byteOffset}, value, this.#endian);`);
+									classUsesEndian = true;
+								}
+							}
 						}
 						else {
-							output.push(`      for (let i = 0, j = this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}; i < ${arrayCount}; i++, j += ${byteCount})`);
-							if (1 === byteCount)
-								output.push(`         this.set${type}(j, value[i]);`);
+							if ((byteCount == 1) || (undefined !== useEndian)) {
+								output.push(`      for (let i = 0, j = this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}; i < ${arrayCount}; i++, j += ${byteCount})`);
+								if (1 === byteCount)
+									output.push(`         this.set${type}(j, value[i]);`);
+								else
+									output.push(`         this.set${type}(j, value[i], ${useEndian});`);
+							}
 							else
-								output.push(`         this.set${type}(j, value[i], ${littleEndian});`);
+								output.push(`      (new ${type}Array(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount})).set(value);`);
 						}
 
 						output.push(`   }`);
@@ -1186,6 +1258,9 @@ function compileDataView(input, pragmas = {}) {
 	if (header)
 		final.unshift(header, "");
 
+	if (usesEndianProxy)
+		final.push(EndianProxy);
+
 	final.push("/*");
 	final.push(`\tView classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
 	final.push("*/");
@@ -1204,6 +1279,89 @@ function compileDataView(input, pragmas = {}) {
 		platform
 	}
 }
-globalThis.compileDataView = compileDataView;
 
+const EndianProxy =
+`const Properties = Object.freeze({
+	concat: Array.prototype.concat,
+	copyWithin: Array.prototype.copyWithin,
+	every: Array.prototype.every,
+	fill: Array.prototype.fill,
+	filter: Array.prototype.filter,
+	find: Array.prototype.find,
+	findIndex: Array.prototype.findIndex,
+	forEach: Array.prototype.forEach,
+	includes: Array.prototype.includes,
+	indexOf: Array.prototype.indexOf,
+	join: Array.prototype.join,
+	map: Array.prototype.map,
+	reduce: Array.prototype.reduce,
+	reduceRight: Array.prototype.reduceRight,
+	slice: Array.prototype.slice,
+	some: Array.prototype.some,
+	sort: Array.prototype.sort,
+	[Symbol.isConcatSpreadable]: true
+});
+
+class EndianArray {
+	constructor(little, shift, doGet, doSet, buffer, byteOffset, length) {
+		if ("object" === typeof buffer) {
+			byteOffset ??= 0;
+			this.count = length ?? Math.trunc((buffer.byteLength - byteOffset) >> shift);
+			if ((this.count << shift) > (buffer.byteLength - byteOffset))
+				throw new RangeError;
+			this.view = new DataView(buffer, byteOffset, this.count << shift);
+		}
+		else {
+			this.count = buffer;
+			this.view = new DataView(new ArrayBuffer(this.count << shift))
+		}
+
+		this.little = little;
+		this.shift = shift;
+		this.view.doGet = doGet;
+		this.view.doSet = doSet;
+
+		return new Proxy(this, this);
+	}
+	has(target, property) {
+		if (Properties[property] || ("length" === property))
+			return true;
+
+		const index = Number(property);
+		if (isNaN(index))
+			return Reflect.has(target, property);
+
+		return (index >= 0) && (index < this.count)
+	}
+	get(target, property, receiver) {
+		if (undefined !== Properties[property])
+			return Properties[property];
+		if ("length" === property)
+			return this.count;
+		
+		const index = Number(property);
+		if (isNaN(index))
+			return Reflect.get(target, property, receiver);
+
+		if ((index >= 0) && (index < this.count))
+			return this.view.doGet(index << this.shift, this.little);
+	}
+	set(target, property, value, receiver) {
+		if (Properties[property] || ("length" === property))
+			return false;
+
+		const index = Number(property);
+		if (isNaN(index))
+			return Reflect.set(target, property, value, receiver);
+
+		if ((index < 0) || (index >= this.count))
+			return;
+
+		this.view.doSet(index << this.shift, value, this.little);
+		return true;
+	}
+}
+`;
+
+globalThis.compileDataView = compileDataView;
 export default compileDataView;
