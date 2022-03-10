@@ -24,6 +24,7 @@
 		- bitfields that align to byte and are a multiple of 8 in size special case
 		- faster generated code for set of embedded views
 		- initializers
+		- ViewArray doesn't work with JSON
 
 */
 
@@ -119,6 +120,7 @@ let comments;
 let header;
 let usesText;
 let usesEndianProxy;
+let usesViewArray;
 let conditionals;
 let final;
 let paddingPrefix;
@@ -518,6 +520,7 @@ function compileDataView(input, pragmas = {}) {
 	header = "";
 	usesText = false;
 	usesEndianProxy = false;
+	usesViewArray = false;
 	conditionals = [{active: true, else: true}];
 	paddingPrefix = "__pad";
 
@@ -596,6 +599,7 @@ function compileDataView(input, pragmas = {}) {
 					classes[className] = {
 						byteLength: 4,
 						align: Math.min(pack, 4),		// enum is int
+						alignLength: 4 
 					};
 					TypeAliases[className] = "Int32"
 
@@ -677,7 +681,8 @@ function compileDataView(input, pragmas = {}) {
 
 				classes[className] = {
 					byteLength: byteOffset,
-					align: classAlign
+					align: classAlign,
+					alignLength: Math.ceil(byteOffset / classAlign) * classAlign,
 				};
 
 				output.length = 0;
@@ -936,6 +941,7 @@ function compileDataView(input, pragmas = {}) {
 
 			let type = part;
 			let name = validateName(parts[pos++]);
+			const isPadding = name.startsWith(paddingPrefix);
 
 			if (":" === parts[pos]) {
 				pos++;
@@ -1006,7 +1012,7 @@ function compileDataView(input, pragmas = {}) {
 					if (classAlign < align)
 						classAlign = align;
 
-					if (doGet && !name.startsWith(paddingPrefix)) {
+					if (doGet && !isPadding) {
 						output.add({
 							javascript: `   get ${name}() {`,
 							typescript: `   get ${name}(): ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `${type}Array`} {`
@@ -1034,7 +1040,7 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 
-					if (doSet && !name.startsWith(paddingPrefix)) {
+					if (doSet && !isPadding) {
 						output.add({
 							javascript: `   set ${name}(value) {`,
 							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
@@ -1069,7 +1075,7 @@ function compileDataView(input, pragmas = {}) {
 
 					endField((arrayCount ?? 1) * byteCount);
 
-					if (!name.startsWith(paddingPrefix)) {
+					if (!isPadding) {
 						if (undefined === arrayCount)
 							jsonOutput.push(`         ${name}: this.${name},`);
 						else
@@ -1088,7 +1094,7 @@ function compileDataView(input, pragmas = {}) {
 					if (undefined !== bitCount)
 						throw new Error(`char cannot use bitfield`);
 
-					if (doGet) {
+					if (doGet && !isPadding) {
 						output.add({
 							javascript: `   get ${name}() {`,
 							typescript: `   get ${name}(): string {`,
@@ -1104,7 +1110,7 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 
-					if (doSet && !name.startsWith(paddingPrefix)) {
+					if (doSet && !isPadding) {
 						output.add({
 							javascript: `   set ${name}(value) {`,
 							typescript: `   set ${name}(value: string) {`,
@@ -1130,7 +1136,7 @@ function compileDataView(input, pragmas = {}) {
 
 					endField(arrayCount ?? 1);
 
-					if (!name.startsWith(paddingPrefix)) {
+					if (!isPadding) {
 						jsonOutput.push(`         ${name}: this.${name},`);
 
 						fromOutput.add({
@@ -1153,7 +1159,7 @@ function compileDataView(input, pragmas = {}) {
 						bitCount
 					});
 
-					if (!name.startsWith(paddingPrefix)) {
+					if (!isPadding) {
 						jsonOutput.push(`         ${name}: this.${name},`);
 
 						fromOutput.add({
@@ -1178,8 +1184,7 @@ function compileDataView(input, pragmas = {}) {
 						boolean: true
 					});
 
-
-					if (!name.startsWith(paddingPrefix)) {
+					if (!isPadding) {
 						jsonOutput.push(`         ${name}: this.${name},`);
 
 						fromOutput.add({
@@ -1195,9 +1200,6 @@ function compileDataView(input, pragmas = {}) {
 
 					flushBitfields();
 
-					if (undefined !== arrayCount)
-						throw new Error(`${type} cannot have array`);
-
 					if (undefined !== bitCount)
 						throw new Error(`cannot use bitfield with "${type}"`);
 
@@ -1205,29 +1207,60 @@ function compileDataView(input, pragmas = {}) {
 					if (byteOffset % align)
 						endField(align - (byteOffset % align));
 
-					if (doGet) {
-						output.add({
-							javascript: `   get ${name}() {`,
-							typescript: `   get ${name}(): ${type} {`,
-						});
-							
-						output.push(`      return new ${type}(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""});`);
-						output.push(`   }`);
+					if (doGet && !isPadding) {
+						if (undefined === arrayCount) {
+							output.add({
+								javascript: `   get ${name}() {`,
+								typescript: `   get ${name}(): ${type} {`,
+							});
+								
+							output.push(`      return new ${type}(this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""});`);
+							output.push(`   }`);
+						}
+						else {
+							output.add({
+								javascript: `   get ${name}() {`,
+								typescript: `   get ${name}(): ArrayLike<${type}> {`,
+							});
+
+							output.push(`      return new ViewArray(${type}, this.buffer, this.byteOffset${byteOffset ? (" + " + byteOffset) : ""}, ${arrayCount}, ${classes[type].alignLength});`);
+							output.push(`   }`);
+
+							usesViewArray = true;
+						}
 					}
 
-					if (doSet && !name.startsWith(paddingPrefix)) {
-						output.add({
-							javascript: `   set ${name}(value) {`,
-							typescript: `   set ${name}(value: ${type}) {`,
-						});
-						output.push(`      for (let i = 0; i < ${classes[type].byteLength}; i++)`);
-						output.push(`         this.setUint8(i + ${byteOffset}, value.getUint8(i));`);
-						output.push(`   }`);
+					if (doSet && !isPadding) {
+						if (undefined === arrayCount) {
+							output.add({
+								javascript: `   set ${name}(value) {`,
+								typescript: `   set ${name}(value: ${type}) {`,
+							});
+							output.push(`      for (let i = 0; i < ${classes[type].byteLength}; i++)`);
+							output.push(`         this.setUint8(i + ${byteOffset}, value.getUint8(i));`);
+							output.push(`   }`);
+						}
+						else {
+							output.add({
+								javascript: `   set ${name}(value) {`,
+								typescript: `   set ${name}(value: ArrayLike<${type}>) {`,
+							});
+							output.push(`      for (let i = 0, offset = 0; i < ${arrayCount}; i++, offset += ${classes[type].alignLength}) {`) ;
+							output.push(`         for (let j = 0, v = value[i]; j < ${classes[type].byteLength}; j++) {`);
+							output.push(`            this.setUint8(j + offset + ${byteOffset}, v.getUint8(j));`);
+							output.push(`         }`);
+							output.push(`      }`);
+							output.push(`   }`);
+						}
 					}
 
-					endField(classes[type].byteLength);
+					if (undefined === arrayCount)
+						endField(classes[type].byteLength);
+					else
+						endField(arrayCount * classes[type].alignLength);
 
-					if (!name.startsWith(paddingPrefix)) {
+
+					if (!isPadding) {
 						jsonOutput.push(`         ${name}: this.${name}.toJSON(),`);
 
 						fromOutput.add({
@@ -1260,6 +1293,9 @@ function compileDataView(input, pragmas = {}) {
 
 	if (usesEndianProxy)
 		final.push(EndianProxy);
+
+	if (usesViewArray)
+		final.push(ViewArray);
 
 	final.push("/*");
 	final.push(`\tView classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
@@ -1358,6 +1394,51 @@ class EndianArray {
 			return;
 
 		this.view.doSet(index << this.shift, value, this.little);
+		return true;
+	}
+}
+`;
+
+const ViewArray =
+`class ViewArray {
+	constructor(View, buffer, byteOffset, count, size) {
+		if ((count * size) > (buffer.byteLength - byteOffset))
+			throw new RangeError;
+
+		this.count = count;
+		this.buffer = buffer;
+		this.byteOffset = byteOffset;
+		this.View = View;
+		this.size = size;
+
+		return new Proxy(this, this);
+	}
+	get(target, property, receiver) {
+		const index = Number(property);
+		if (isNaN(index))
+			return Reflect.get(target, property, receiver);
+
+		if ((index < 0) || (index >= this.count))
+			return;
+
+		return new (this.View)(this.buffer, this.byteOffset + (this.size * index));
+	}
+	set(target, property, value, receiver) {
+		const index = Number(property);
+		if (isNaN(index))
+			return Reflect.set(target, property, value, receiver);
+
+		if ((index < 0) || (index >= this.count))
+			return;
+
+		if (!(value instanceof this.View))
+			throw new Error("bad value");
+
+		const size = this.size;
+		const src = new Uint8Array(value.buffer, value.byteOffset, size); 
+		const dst = new Uint8Array(this.buffer, this.byteOffset + (size * index), size);
+		dst.set(src); 
+
 		return true;
 	}
 }
