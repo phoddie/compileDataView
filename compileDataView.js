@@ -575,9 +575,10 @@ function compileDataView(input, pragmas = {}) {
 				}
 				else
 				if (undefined !== enumState) {
+					const xsExport = doExport && ("xs" === platform) && ("typescript" === language);
 					output.add({
 						javascript: `${doExport ? "export " : ""}const ${className} = Object.freeze({`,
-						typescript: `${doExport ? "export " : ""}enum ${className} {`,
+						typescript: `${(doExport && !xsExport) ? "export " : ""}enum ${xsExport ? "__" : ""}${className} {`,
 					});
 					for (let [name, value] of enumState) {
 						if ("string" === typeof value)
@@ -591,6 +592,10 @@ function compileDataView(input, pragmas = {}) {
 						javascript: `});`,
 						typescript: `}`,
 					});
+					if (xsExport) {
+						output.push(`Object.freeze(<Object>__${className});`);
+						output.push(`export const ${className} = __${className};`);
+					}
 					output.push(``);
 
 					final = final.concat(output);
