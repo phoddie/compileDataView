@@ -88,6 +88,7 @@ const TypeScriptTypeAliases = {
 const isTypedef = Symbol("typedef");
 
 let className;
+let superClassName;
 let classUsesEndian;
 let output;
 let classes;
@@ -488,6 +489,7 @@ const kDefaultPack = 16;
 
 function compileDataView(input, pragmas = {}) {
 	className = undefined;
+	superClassName = undefined;
 	classUsesEndian = false;
 	output = new Output;
 	properties = [];
@@ -614,9 +616,6 @@ function compileDataView(input, pragmas = {}) {
 					continue;
 				}
 
-				if (!byteOffset)
-					throw new Error(`empty struct`);
-
 				if (isTypedef === className) {
 					className = validateName(parts[pos++]);
 					if (classes[className])
@@ -626,7 +625,7 @@ function compileDataView(input, pragmas = {}) {
 				if (";" !== parts[pos++])
 					throw new Error(`expected semicolon`);
 
-				if (json) {
+				if (json && byteOffset > 0) {
 					if (doGet) {
 						output.add({
 							javascript: `   toJSON() {`,
@@ -634,6 +633,8 @@ function compileDataView(input, pragmas = {}) {
 						});
 						output.push(`      return {`);
 						output = output.concat(jsonOutput);
+						if (superClassName)
+							output.push(`         ...super.toJSON()`);
 						output.push(`      };`);
 						output.push(`   }`);
 					}
@@ -646,6 +647,8 @@ function compileDataView(input, pragmas = {}) {
 						});
 						output.push(`      const result = new ${className};`);
 						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
+						if (superClassName)
+							output.push(`      super.from(obj);`)
 						output.push(`      return result;`);
 						output.push(`   }`);
 					}
@@ -656,31 +659,41 @@ function compileDataView(input, pragmas = {}) {
 				output.push(``);
 
 				const start = new Output;
-				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
-				if (outputByteLength)
-					start.push(`   static byteLength = ${byteOffset};`);
+				start.push(`${doExport ? "export " : ""}class ${className} extends ${superClassName ?? extendsClass} {`);
 
+				let superByteLength = 0;
+				let parentClass = superClassName;
+				while (classes[parentClass]) {
+					superByteLength += classes[parentClass].byteLength;
+					parentClass = classes[parentClass].extendsClass;
+				}
+				if (outputByteLength)
+					start.push(`   static byteLength = ${superByteLength + byteOffset}`);
 				if (classUsesEndian)
 					start.push(`   #endian;`);
 
 				if (outputByteLength || classUsesEndian)
 					start.push(``);
 
-				const limit = checkByteLength ? `, ${byteOffset}` : "";
-				start.add({
-					javascript: `   constructor(data, offset) {`,
-					typescript: `   constructor(data?: ArrayBufferLike, offset?: number) {`
-				});
-				start.push(`      if (data)`);
-				start.push(`         super(data, offset ?? 0${limit});`);
-				start.push(`       else`);
-				start.push(`         super(new ArrayBuffer(${byteOffset}));`);
-				if (classUsesEndian) {
-					start.push(`      this.setUint8(0, 1);`);
-					start.push(`      this.#endian = 1 === this.getUint16(0, true);`);
-					start.push(`      this.setUint8[0] = 0;`);
+				if (byteOffset > 0) {
+					const limit = checkByteLength ? `, length ?? ${superByteLength + byteOffset}` : ", length";
+					start.add({
+						javascript: `   constructor(data, offset, length) {`,
+						typescript: `   constructor(data?: ArrayBufferLike, offset?: number, length?: number) {`
+					});
+
+					start.push(`      if (data)`);
+					start.push(`         super(data, offset ?? 0${limit});`);
+					start.push(`       else`);
+					start.push(`         super(new ArrayBuffer(${superByteLength + byteOffset}));`);
+
+					if (classUsesEndian) {
+						start.push(`      this.setUint8(0, 1);`);
+						start.push(`      this.#endian = 1 === this.getUint16(0, true);`);
+						start.push(`      this.setUint8[0] = 0;`);
+					}
+					start.push(`   }`);
 				}
-				start.push(`   }`);
 
 				final = final.concat(start, output);
 
@@ -688,6 +701,8 @@ function compileDataView(input, pragmas = {}) {
 					byteLength: byteOffset,
 					align: classAlign,
 					alignLength: Math.ceil(byteOffset / classAlign) * classAlign,
+					superClassName,
+					superByteLength
 				};
 
 				output.length = 0;
@@ -695,6 +710,7 @@ function compileDataView(input, pragmas = {}) {
 				properties.length = 0;
 				className = undefined;
 				classAlign = 0;
+				superClassName = undefined;
 
 				continue;
 			}
@@ -770,17 +786,25 @@ function compileDataView(input, pragmas = {}) {
 				if (className)
 					throw new Error(`cannot nest structure`);
 
-				if ("{" !== parts[pos + 1])
-					throw new Error(`open brace expected`);
-
 				className = validateName(parts[pos]);
 				if (classes[className])
 					throw new Error(`duplicate class "${className}"`);
+
+				if (":" == parts[pos + 1]) {
+					superClassName = parts[pos + 2];
+					if (!classes[superClassName])
+						throw new Error(`unknown super class "${superClassName}"`)
+					byteOffset = classes[superClassName].byteLength;
+				}
+
+				if ("{" !== parts[pos + (superClassName ? 3 : 1)])
+					throw new Error(`open brace expected`);
+
 				classAlign = 1;
 				jsonOutput = new Output;
 				fromOutput = new Output;
 
-				pos += 2;
+				pos += (superClassName ? 4 : 2);
 				continue;
 			}
 

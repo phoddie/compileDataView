@@ -5,6 +5,7 @@
    #pragma comments(true)              // include all block comments
    #pragma json(true)                  // include JSON methods
    #pragma language(typescript/node)   // use TypeScript with Node style string buffers
+   #pragma outputByteLength(true)      // include length of structures in output
 #endif
 
 // Line comments are always ignored
@@ -21,8 +22,8 @@ enum Masks {
    will be included in the output
 */
 #if defined(__COMPILEDATAVIEW__)
-	#pragma import({ MyIntegers } from "./MyIntegers" implements MyIntegers)     // generates "import { MyIntegers } from "./MyIntegers" to get interfaces types
-	#pragma extends(MyInterface)
+	#pragma import({ MyIntegers } from "./MyIntegers")     // generates "import { MyIntegers } from "./MyIntegers" to get interfaces types
+	#pragma extends(DataView implements MyIntegers)
 #endif
 
 struct Integers {
@@ -131,4 +132,32 @@ struct Key {
 	uint8_t value; 
 	uint8_t __pad2;
 	uint32_t id;
+};
+
+// Base class used for inheritance
+struct Base {
+   uint32_t b1;
+   char b2;
+};
+
+// Inherits Base 
+struct ExtBase : Base {
+   uint16_t eb1;
+   uint32_t eb2;
+   char eb3;
+};
+
+enum Constants {
+   MAX_SIZE = 30
+};
+
+// Inherits ExtBase
+struct MoreBase : ExtBase {
+   uint32_t mb1;
+   char mb2;
+   char mb3[Constants.MAX_SIZE];
+};
+
+// Empty class
+struct Nothing {
 };
