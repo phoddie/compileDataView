@@ -516,6 +516,15 @@ enum PowersOfTwo {
 ```
 Anonymous enumerations generate no code and are not exported. The values may be used in expressions.
 
+The default `enum` is a 4-byte (`int32_t`) value.  You can adjust the type size with:
+
+```c
+enum Small : uint8_t {
+   one = 1,
+   two = 2
+};
+```
+
 ```c
 enum {
    two = 2
@@ -790,7 +799,7 @@ struct TwoThing : BaseThing {
 };
 
 #if defined(__COMPILEDATAVIEW__)
-   #pragma inject(type AllThings = IOneThing | ITwoThing)
+   #pragma inject(export type AllThings = IOneThing | ITwoThing)
 #endif
 ```
 
@@ -823,6 +832,12 @@ CompileDataView implements a subset of the C preprocessor `#if`, `#else` and `#e
    #pragma json(true)
 #endif
 ```
+
+Available macro include:
+
+* `__COMPILEDATAVIEW__`: Defined when running in CompileDataView, and contains the version number
+* `__LANGUAGE_<language>__`: Defined as `true` for the selected language (see [pragma language](#language)).  For example, `__LANGUAGE_TYPESCRIPT__`, otherwise undefined.
+* `__PLATFORM_<platform>__`: Defined as `true` for the selected platform (see [pragma language](#language)).  For example, `__PLATFORM_XS__`, otherwise undefined.
 
 Nested `#if` directives are supported.
 

@@ -11,11 +11,18 @@
 // Line comments are always ignored
 
 enum Masks {
+   /** JSDoc style comment on a */
    a = 1 << 31,
+   /** JSDoc style comment on b */
    b = 0x00FF0000,
    c = 0b001100,
    notC = ~c
 };
+
+enum SmallEnum : uint8_t {
+   oneByte,
+   notFour
+}
 
 /*
    Because "#pragma comments(true)" is enabled, this block comment
@@ -36,6 +43,7 @@ struct Integers {
    int8_t id;
    int16_t origin;
    uint8_t uuid[16];
+   SmallEnum tiny;
 };
 
 #if defined(__COMPILEDATAVIEW__)

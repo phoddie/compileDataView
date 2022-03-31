@@ -28,7 +28,7 @@
 
 */
 
-const Version = 2;
+const Version = 3;
 
 const byteCounts = {
 	Int8: 1,
@@ -129,6 +129,7 @@ let conditionals;
 let final;
 let paddingPrefix;
 let injectInterface;
+let exports;
 
 class Output extends Array {
 	add(line) {
@@ -137,7 +138,7 @@ class Output extends Array {
 			if (undefined === line)
 				throw new Error(`no generated code for ${language}`);
 		}
-		this.push(line);
+		if (line.length) this.push(line);
 	}
 }
 
@@ -546,6 +547,7 @@ function compileDataView(input, pragmas = {}) {
 	conditionals = [{active: true, else: true}];
 	paddingPrefix = "__pad";
 	injectInterface = [];
+	exports = [];
 
 	final = [];
 	const errors = [];
@@ -596,15 +598,17 @@ function compileDataView(input, pragmas = {}) {
 						continue;
 					}
 				}
-				else
-				if (undefined !== enumState) {
+				else if (undefined !== enumState) {
 					if (anonymous !== className) {
-						const xsExport = doExport && ("xs" === platform) && ("typescript" === language);
+						exports.push(className);
+
 						output.add({
-							javascript: `${doExport ? "export " : ""}const ${className} = Object.freeze({`,
-							typescript: `${(doExport && !xsExport) ? "export " : ""}enum ${xsExport ? "__" : ""}${className} {`,
+							javascript: `const ${className} = Object.freeze({`,
+							typescript: `enum ${className} {`,
 						});
-						for (let [name, value] of enumState) {
+						for (let [name, { value, jsdocComment }] of enumState) {
+							if (jsdocComment)
+								output.push(jsdocComment);
 							if ("string" === typeof value)
 								value = '"' + value + '"';
 							output.add({
@@ -616,21 +620,19 @@ function compileDataView(input, pragmas = {}) {
 							javascript: `});`,
 							typescript: `}`,
 						});
-						if (xsExport) {
-							output.push(`Object.freeze(<Object>__${className});`);
-							output.push(`export const ${className} = __${className};`);
-						}
 						output.push(``);
 
 						final = final.concat(output);
 						output.length = 0;
+						const enumBackingType = TypeAliases[enumState.backingType];
+						const enumBackingBytes = byteCounts[enumBackingType];
 
 						classes[className] = {
-							byteLength: 4,
-							align: Math.min(pack, 4),		// enum is int
-							alignLength: 4 
+							byteLength:  enumBackingBytes,
+							align: Math.min(pack, enumBackingBytes),
+							alignLength: enumBackingBytes 
 						};
-						TypeAliases[className] = "Int32"
+						TypeAliases[className] = enumBackingType;
 					}
 
 					enumState = undefined;
@@ -686,25 +688,33 @@ function compileDataView(input, pragmas = {}) {
 				output.push(``);
 
 				const start = new Output;
-				if (injectInterface.length == 0)
+				if ("typescript" == language)
+					exports.push("I" + className);
+				if (injectInterface.length == 0) {
 					start.add({
-						typescript: `export interface I${className} extends Omit<${className}, keyof DataView | 'toJSON'> {};`
+						javascript: '',
+						typescript: `type I${className} = Omit<${className}, keyof DataView | "toJSON">;`
 					});
+				}
 				else {
 					start.add({
-						typescript: `export interface I${className} extends Omit<${className}, keyof DataView | 'toJSON'> {`
+						javascript: '',
+						typescript: `interface I${className} extends Omit<${className}, keyof DataView | "toJSON"> {`
 					});
 					injectInterface.forEach((inject) => {
 						start.add({ 
+							javascript: '',
 							typescript: inject
 						})
 					});
 					start.add({
-						typescript: `};`
+						javascript: '',
+						typescript: `}`
 					});
 					injectInterface = [];
 				}
-				start.push(`${doExport ? "export " : ""}class ${className} extends ${superClassName ?? extendsClass} {`);
+				exports.push(className);
+				start.push(`class ${className} extends ${superClassName ?? extendsClass} {`);
 
 				let superByteLength = 0;
 				let parentClass = superClassName;
@@ -791,16 +801,26 @@ function compileDataView(input, pragmas = {}) {
 				if (className)
 					throw new Error(`enum must be at root`);
 
+				let backingType = 'int32_t';
+
 				if ("{" !== parts[pos]) {
 					className = validateName(parts[pos++]);
 					if (classes[className])
 						throw new Error(`duplicate name "${enumState.name}"`);
+
+					if (':' == parts[pos]) {
+						backingType = parts[pos + 1];
+						if (!TypeAliases[backingType])
+							throw new Error(`unknown enum type ${backingType}`);
+						pos += 2;
+					}
 				}
 				else
 					className = anonymous;
 
 				enumState = new Map;
 				enumState.value = -1;
+				enumState.backingType = backingType;
 
 				if ("{" !== parts[pos++])
 					throw new Error(`open brace expected`);
@@ -917,7 +937,13 @@ function compileDataView(input, pragmas = {}) {
 								return "defined" !== property;
 							},
 							get(target, property) {
-								return ("__COMPILEDATAVIEW__" === property) ? ${Version} : undefined;
+								if ("__COMPILEDATAVIEW__" == property)
+									return "${Version}";
+								if ("__LANGUAGE_${language.toUpperCase()}__" == property)		
+									return true;
+								if ("__PLATFORM_${platform.toUpperCase()}__" == property)
+									return true;
+								return undefined;
 							}
 						});
 						const defined = function(t) {return undefined !== t};
@@ -1006,7 +1032,8 @@ function compileDataView(input, pragmas = {}) {
 					throw new Error(`duplicate enum: ${part}`);
 				enums.add(part);
 
-				enumState.set(part, value);
+				enumState.set(part, { value, jsdocComment });
+				jsdocComment = undefined;
 
 				if ("string" === typeof value)
 					value = '"' + value + '"';
@@ -1396,6 +1423,31 @@ function compileDataView(input, pragmas = {}) {
 	if (usesViewArray)
 		final.push(ViewArray);
 
+	if (exports.length && doExport) {
+		final.push("");
+		let exportLine = "export { ";
+		if (exports.length > 3) {
+			final.push(exportLine);
+			exportLine = "";
+		}
+		for (let i = 0; i < exports.length; ++i) {
+			if (exportLine.length > 80) {
+				final.push("   " + exportLine);
+				exportLine = "";
+			}
+			exportLine = exportLine + exports[i] + ((i < (exports.length - 1)) ? ', ' : '');
+		}
+		if (exportLine != "") {
+			if (exports.length <= 3)
+				final.push(exportLine + " };");
+			else {
+				final.push("   " + exportLine);
+				final.push("};");
+			}
+		}
+	}
+
+	final.push("");
 	final.push("/*");
 	final.push(`\tView classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
 	final.push("*/");
