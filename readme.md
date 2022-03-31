@@ -2,7 +2,7 @@
 
 Copyright 2021-2022 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: March 2, 2022
+Revised: March 30, 2022
 
 ## Table of Contents
 
@@ -477,14 +477,14 @@ enum Masks {
 };
 ```
 
-In JavaScript, the enumeration values are accessed through the enumeration name:
+In JavaScript, enumeration values are accessed through the enumeration name:
 
 ```js
 trace(Values.three, "\n");
 trace(Masks.a, "\n");
 ```
 
-The `enum` expressions implements some behaviors incompatible with C by supporting floating point, string, and boolean values and expressions that reference enumeration values. These are convenient in some situations.
+The `enum` expressions implements some behaviors incompatible with C by supporting floating point, string, and boolean values. These are convenient in some situations.
 
 ```c
 enum Zero {
@@ -497,7 +497,18 @@ enum PowersOfTwo {
    zero = 1,
    one = zero << 1,
    two = one ** 2,
-   isZero = !Zero.isZero
+   isNotZero = !isZero
+};
+```
+Anonymous enumerations generate no code and are not exported. The values may be used in expressions.
+
+```c
+enum {
+   two = 2
+};
+
+struct TwoBytes {
+   uint8_t data[two];
 };
 ```
 
@@ -512,7 +523,7 @@ The following pragmas are available (first option is the default):
 - [`bitfields(lsb | msb`](#bitfields)
 - [`checkByteLength(true | false)`](#checkbytelength)
 - [`comments(header | false | true)`](#comments)
-- [`endian(little | big)`](#endian)
+- [`endian(host | little | big)`](#endian)
 - [`export(true, false)`](#export)
 - [`extends(DataView | <custom>)`](#extends)
 - [`get(true | false)` and `set(true | false)`](#get-and-set)
@@ -569,7 +580,7 @@ The `get` and `set` pragmas control whether the generated class contains getters
 Excluding getters or setters generates less code and has no performance impact. This is useful when you know a particular data structure is only used for reading or writing.
 
 #### `endian`
-The `endian` pragma controls how multi-byte numeric values are stored. The default is `"host"` which will match the host endianness at runtime.  Other options are "little" for little-endian order and `"big"` for big-endian. Views that are used to only reduce the memory required for properties should not change the `endian` pragma from the default as native machine order is the most efficient.
+The `endian` pragma controls how multi-byte numeric values are stored. The default is `"host"` which matches the host endianness at runtime.  Other options are "little" for little-endian order and `"big"` for big-endian. Views that are used to only reduce the memory required for properties should not change the `endian` pragma from the default as native machine order is the most efficient.
 
 The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`. The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
 

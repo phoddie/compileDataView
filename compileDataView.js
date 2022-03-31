@@ -86,6 +86,7 @@ const TypeScriptTypeAliases = {
 }
 
 const isTypedef = Symbol("typedef");
+const anonymous = Symbol("anonymous");
 
 let className;
 let superClassName;
@@ -112,6 +113,7 @@ let outputByteLength;
 let checkByteLength;
 let union;
 let enumState;
+let enums;
 let enumContext;
 let classAlign;
 let anonymousUnion;
@@ -513,6 +515,7 @@ function compileDataView(input, pragmas = {}) {
 	checkByteLength = true;
 	union = undefined;
 	enumState = undefined;
+	enums = new Set;
 	enumContext = "";
 	classAlign = 0;
 	anonymousUnion = false;
@@ -577,38 +580,40 @@ function compileDataView(input, pragmas = {}) {
 				}
 				else
 				if (undefined !== enumState) {
-					const xsExport = doExport && ("xs" === platform) && ("typescript" === language);
-					output.add({
-						javascript: `${doExport ? "export " : ""}const ${className} = Object.freeze({`,
-						typescript: `${(doExport && !xsExport) ? "export " : ""}enum ${xsExport ? "__" : ""}${className} {`,
-					});
-					for (let [name, value] of enumState) {
-						if ("string" === typeof value)
-							value = '"' + value + '"';
+					if (anonymous !== className) {
+						const xsExport = doExport && ("xs" === platform) && ("typescript" === language);
 						output.add({
-							javascript: `   ${name}: ${value},`,
-							typescript: `   ${name} = ${value},`,
+							javascript: `${doExport ? "export " : ""}const ${className} = Object.freeze({`,
+							typescript: `${(doExport && !xsExport) ? "export " : ""}enum ${xsExport ? "__" : ""}${className} {`,
 						});
-					}
-					output.add({
-						javascript: `});`,
-						typescript: `}`,
-					});
-					if (xsExport) {
-						output.push(`Object.freeze(<Object>__${className});`);
-						output.push(`export const ${className} = __${className};`);
-					}
-					output.push(``);
+						for (let [name, value] of enumState) {
+							if ("string" === typeof value)
+								value = '"' + value + '"';
+							output.add({
+								javascript: `   ${name}: ${value},`,
+								typescript: `   ${name} = ${value},`,
+							});
+						}
+						output.add({
+							javascript: `});`,
+							typescript: `}`,
+						});
+						if (xsExport) {
+							output.push(`Object.freeze(<Object>__${className});`);
+							output.push(`export const ${className} = __${className};`);
+						}
+						output.push(``);
 
-					final = final.concat(output);
-					output.length = 0;
+						final = final.concat(output);
+						output.length = 0;
 
-					classes[className] = {
-						byteLength: 4,
-						align: Math.min(pack, 4),		// enum is int
-						alignLength: 4 
-					};
-					TypeAliases[className] = "Int32"
+						classes[className] = {
+							byteLength: 4,
+							align: Math.min(pack, 4),		// enum is int
+							alignLength: 4 
+						};
+						TypeAliases[className] = "Int32"
+					}
 
 					enumState = undefined;
 					className = undefined;
@@ -749,13 +754,16 @@ function compileDataView(input, pragmas = {}) {
 				if (className)
 					throw new Error(`enum must be at root`);
 
-				className = validateName(parts[pos++]);
-				if (classes[className])
-					throw new Error(`duplicate name "${enumState.name}"`);
+				if ("{" !== parts[pos]) {
+					className = validateName(parts[pos++]);
+					if (classes[className])
+						throw new Error(`duplicate name "${enumState.name}"`);
+				}
+				else
+					className = anonymous;
 
 				enumState = new Map;
 				enumState.value = -1;
-				enumContext += `const ${className} = {}\n`;
 
 				if ("{" !== parts[pos++])
 					throw new Error(`open brace expected`);
@@ -937,11 +945,6 @@ function compileDataView(input, pragmas = {}) {
 					const end = Math.min((comma < 0) ? 32767 : comma, (brace < 0) ? 32767 : brace);
 					const expression = parts.slice(pos, end).join(" ");
 					let context = "(function () {\n" + enumContext;
-					for (let [name, value] of enumState) {
-						if ("string" === typeof value)
-							value = '"' + value + '"';
-						context += `const ${name} = ${value};\n`;
-					}
 					context += `return ${expression};\n`;
 					context += `})();`
 					enumState.value = value = eval(context);
@@ -958,11 +961,15 @@ function compileDataView(input, pragmas = {}) {
 				else
 					throw new Error(`syntax error`);
 
+				if (enums.has(part))
+					throw new Error(`duplicate enum: ${part}`);
+				enums.add(part);
+
 				enumState.set(part, value);
 
 				if ("string" === typeof value)
 					value = '"' + value + '"';
-				enumContext += `${className}.${part} = ${value};\n`;
+				enumContext += `const ${part} = ${value};\n`;
 
 				continue;
 			}
