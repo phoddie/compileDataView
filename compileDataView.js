@@ -489,6 +489,10 @@ function setPragma(setting, value) {
 			break;
 
 		case "inject":
+			if (jsdocClassComment) {
+				final.push(jsdocClassComment);
+				jsdocClassComment = "";
+			}
 			final.push(`${className ? '   ' : ''}${value};`);
 			break;
 
