@@ -183,19 +183,19 @@ struct BaseLiteral {
 };
 
 struct TypeOne : BaseLiteral {
-   #if defined(__COMPILEDATAVIEW__)
+   #if defined(__LANGUAGE_TYPESCRIPT__)
       #pragma injectInterface(type: TypeLiteral.One)
    #endif
    uint16_t somethingMore;
 };
 
 struct TypeTwo : BaseLiteral {
-   #if defined(__COMPILEDATAVIEW__)
+   #if defined(__LANGUAGE_TYPESCRIPT__)
       #pragma injectInterface(type: TypeLiteral.Two)
    #endif
 };
 
-#if defined(__COMPILEDATAVIEW__)
+#if defined(__LANGUAGE_TYPESCRIPT__)
    #pragma inject(type BaseTypes = ITypeOne | ITypeTwo)
 #endif
 
