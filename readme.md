@@ -552,6 +552,7 @@ The following pragmas are available (first option is the default):
 - [`extends(DataView | <custom>)`](#extends)
 - [`get(true | false)` and `set(true | false)`](#get-and-set)
 - [`import(<import syntax>)`](#import)
+- [`includeSource(true | false)`](#includesource)
 - [`json(false | true)`](#json)
 - [`language('javascript/xs' | <javascript | typescript>{/<xs | web | node>})`](#language)
 - [`outputByteLength(false | true)`](#outputbytelength)
@@ -814,6 +815,11 @@ data.anotherValue = 10;
 // with narrowing, we can access the members
 if (data.type == Type.One) data.anotherValue = 10;
 ```
+
+#### `includeSource`
+
+By default the original source code (the `*.cdv.h` file) is included, commented out, at the end of the generated file.  This can be
+disabled by using `#pragma includeSource(false)`.
 
 <a id="if-else-endif"></a>
 ## Conditional Compilation
