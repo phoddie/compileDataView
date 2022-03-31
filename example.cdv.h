@@ -33,6 +33,9 @@ enum SmallEnum : uint8_t {
 	#pragma extends(DataView implements MyIntegers)
 #endif
 
+/**
+   JSDoc is included before structs, including in front of the `interface` if using TypeScript
+*/
 struct Integers {
    /* block comments also work here */
    uint16_t size;

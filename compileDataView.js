@@ -121,6 +121,7 @@ let json;
 let bitfieldsLSB;
 let comments;
 let jsdocComment;
+let jsdocClassComment;
 let header;
 let usesText;
 let usesEndianProxy;
@@ -545,6 +546,7 @@ function compileDataView(input, pragmas = {}) {
 	bitfieldsLSB = true;
 	comments = "header";
 	jsdocComment = undefined;
+	jsdocClassComment = undefined;
 	header = "";
 	usesText = false;
 	usesEndianProxy = false;
@@ -677,10 +679,10 @@ function compileDataView(input, pragmas = {}) {
 							typescript: `   static from(obj: I${className}, data?: ${className}): ${className} {`
 						});
 						if (superClassName)
-						output.add({
-								javascript: `      const result = super.from(obj, data ?? new ${className});`,
-								typescript: `      const result = <${className}> <unknown> super.from(obj, <${superClassName}> <unknown> (data ?? new ${className}));`
-							});
+							output.add({
+									javascript: `      const result = super.from(obj, data ?? new ${className});`,
+									typescript: `      const result = <${className}> <unknown> super.from(obj, <${superClassName}> <unknown> (data ?? new ${className}));`
+								});
 						else
 							output.push(`      const result = data ?? new ${className};`);
 						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
@@ -694,33 +696,22 @@ function compileDataView(input, pragmas = {}) {
 				output.push(``);
 
 				const start = new Output;
-				if ("typescript" == language)
+				if ("typescript" == language) {
 					exports.push("I" + className);
-				if (injectInterface.length == 0) {
-					start.add({
-						javascript: '',
-						typescript: `type I${className} = Omit<${className}, keyof DataView | "toJSON">;`
-					});
+					if (jsdocClassComment) start.push(jsdocClassComment);
+					if (injectInterface.length == 0)
+						start.push(`type I${className} = Omit<${className}, keyof DataView | "toJSON">;`);
+					else {
+						start.push(`interface I${className} extends Omit<${className}, keyof DataView | "toJSON"> {`);
+						injectInterface.forEach((inject) => start.push(inject));
+						start.push(`}`);
+						injectInterface = [];
+					}
 				}
-				else {
-					start.add({
-						javascript: '',
-						typescript: `interface I${className} extends Omit<${className}, keyof DataView | "toJSON"> {`
-					});
-					injectInterface.forEach((inject) => {
-						start.add({ 
-							javascript: '',
-							typescript: inject
-						})
-					});
-					start.add({
-						javascript: '',
-						typescript: `}`
-					});
-					injectInterface = [];
-				}
+				if (jsdocClassComment) start.push(jsdocClassComment);
 				exports.push(className);
 				start.push(`class ${className} extends ${superClassName ?? extendsClass} {`);
+				jsdocClassComment = undefined;
 
 				let superByteLength = 0;
 				let parentClass = superClassName;
@@ -883,9 +874,12 @@ function compileDataView(input, pragmas = {}) {
 				if (("header" === comments) && (1 === pos))
 					header = part;
 				else if ("true" === comments) {
-					if (part.startsWith('/**') && className) 
-						jsdocComment = '   ' + part;
-					else {
+					if (part.startsWith('/**')) {
+						if (className)
+							jsdocComment = '   ' + part;
+						else
+							jsdocClassComment = '\n' + part;
+					} else {
 						if (className)
 							output.push('   ' + part);
 						else
