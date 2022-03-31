@@ -2,7 +2,7 @@
 
 Copyright 2021-2022 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: March 30, 2022
+Revised: March 31, 2022
 
 ## Table of Contents
 
@@ -431,6 +431,20 @@ struct Rectangle {
 };
 ```
 
+<a id="inheritance"></a>
+#### Inheritance
+Classes may be inherited as well.  The [extends](#extends) pragma is ignored when when inheritance is used on subclasses, as the base class owns the `extends` class specification.
+
+```c
+struct BaseClass {
+   uint16_t one;
+}
+
+struct SubClass : BaseClass {
+   uint32_t two;
+}
+```
+
 The generated classes may be used by scripts.
 
 ```js
@@ -521,6 +535,7 @@ Pragmas can be changed in mid-file. For example, changing the `endian` pragma, w
 The following pragmas are available (first option is the default):
 
 - [`bitfields(lsb | msb`](#bitfields)
+- [`inject(value)` and `injectInterface(value)`](#inject)
 - [`checkByteLength(true | false)`](#checkbytelength)
 - [`comments(header | false | true)`](#comments)
 - [`endian(host | little | big)`](#endian)
@@ -721,6 +736,10 @@ The `bitfields ` pragma controls whether bitfields are stored in the least or mo
 #### `comments`
 The `comments` pragma controls how block (`/* ... */`) comments are injected into the output.  Options are `false` (no comments), `header` (default; include only the header block comment, which must start on the first line of the file) and `true` (include all block comments).  Line comments (`// ...`) are never injected.  This can be changed throughout the file. 
 
+When comments are set to `true`, [JSDoc](https://github.com/jsdoc/jsdoc) / [TSDoc](https://tsdoc.org/) style comments (`/** ... */`)
+that are placed in front of properties will be duplicated across all generated getters/settings to retain the documentation on all
+property usage (such as when using an IDE that provides documentation when hovering over a property/method).
+
 #### `import`
 The `import` pragma injects an import for pulling in modules and TypeScript type definitions.  The parameter specifies the body of the import statement.  Multiple imports can be specified by using the pragma multiple times.  For example,
 
@@ -737,6 +756,55 @@ import { myMethod } from "./MyClass";
 ```
 
 Imports may be placed anywhere in the content, but will always be injected at the top of the file (after the first comment if provided).
+
+#### `inject` and `injectInterface`
+The `inject` and `injectInterface` pragmas inject content directly into the generated source file without any processing.  
+This can be used to access language specific functionality (JavaScript, TypeScript) that might otherwise by unavailable.  The `inject`
+pragma injects the content directly into the generated file at the current location, whereas `injectInterface` and adds the 
+content into the interface definition for the current class (TypeScript only).
+
+For example, to enable TypeScript to use type narrowing on classes based on a literal type:
+
+```c
+enum Type {
+   One,
+   Two
+};
+
+struct BaseThing {
+   Type type;
+};
+
+struct OneThing : BaseThing {
+   #if defined(__COMPILEDATAVIEW__)
+     #pragma injectInterface(type: Type.One)
+   #endif
+   uint16_t anotherValue;
+};
+
+struct TwoThing : BaseThing {
+   #if defined(__COMPILEDATAVIEW__)
+     #pragma injectInterface(type: Type.Two)
+   #endif
+   char moreData[20];
+};
+
+#if defined(__COMPILEDATAVIEW__)
+   #pragma inject(type AllThings = IOneThing | ITwoThing)
+#endif
+```
+
+This results in having a base type `AllThings` that will narrow as the `type` member is defined.  Note that classes all are generated in TypeScript with an `I<ClassName>` interface, which removes `DataView` to eliminate dependencies when defining the interface and not the object.  Use the `<ClassName>.from` static method to convert constructed objects into the compact `ArrayBuffer` objects:
+
+```ts
+const data: AllThings = OneThing.from({ type: Type.One, anotherValue: 22 });
+
+// this is an error, because the type is `AllThings` and has not narrowed
+data.anotherValue = 10;
+
+// with narrowing, we can access the members
+if (data.type == Type.One) data.anotherValue = 10;
+```
 
 <a id="if-else-endif"></a>
 ## Conditional Compilation

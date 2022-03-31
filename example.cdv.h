@@ -30,7 +30,7 @@ struct Integers {
    /* block comments also work here */
    uint16_t size;
    /**
-      Multi-line JSDocs format works as well
+      Multi-line JSDocs format works as well, included on each getter/setter of the property
    */
    uint32_t source;
    int8_t id;
@@ -39,8 +39,7 @@ struct Integers {
 };
 
 #if defined(__COMPILEDATAVIEW__)
-	#pragma extends()    // disable extends for remaining
-	#pragma comments(false)      // all block comments will be ignored from here down
+	#pragma extends()          // disable extends for remaining
 #endif
 
 /*
@@ -62,12 +61,19 @@ struct BooleansAndBitFields {
    bool b3;
 
    uint32_t foo:1;
+   /**
+    * JSDoc style works with bitfields as well (bar) 
+    */
    uint32_t bar:2;
    uint32_t grr:4;
+   /** JSDoc style works with bitfields as well (zrr) */
    uint32_t zrr:16;
    uint32_t yrr:4;
 };
 
+#if defined(__COMPILEDATAVIEW__)
+	#pragma comments(false)      // all block comments will be ignored from here down
+#endif
 
 struct FloatAndBigInts {
    float f32;
@@ -155,9 +161,33 @@ enum Constants {
 struct MoreBase : ExtBase {
    uint32_t mb1;
    char mb2;
-   char mb3[Constants.MAX_SIZE];
+   char mb3[MAX_SIZE];
 };
 
-// Empty class
-struct Nothing {
+// example of using injections with type literals and inheritance in TypeScript
+enum TypeLiteral {
+   One,
+   Two
 };
+
+struct BaseLiteral {
+   TypeLiteral type;
+};
+
+struct TypeOne : BaseLiteral {
+   #if defined(__COMPILEDATAVIEW__)
+      #pragma injectInterface(type: TypeLiteral.One)
+   #endif
+   uint16_t somethingMore;
+};
+
+struct TypeTwo : BaseLiteral {
+   #if defined(__COMPILEDATAVIEW__)
+      #pragma injectInterface(type: TypeLiteral.Two)
+   #endif
+};
+
+#if defined(__COMPILEDATAVIEW__)
+   #pragma inject(type BaseTypes = ITypeOne | ITypeTwo)
+#endif
+

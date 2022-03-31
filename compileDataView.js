@@ -120,6 +120,7 @@ let anonymousUnion;
 let json;
 let bitfieldsLSB;
 let comments;
+let jsdocComment;
 let header;
 let usesText;
 let usesEndianProxy;
@@ -127,6 +128,7 @@ let usesViewArray;
 let conditionals;
 let final;
 let paddingPrefix;
+let injectInterface;
 
 class Output extends Array {
 	add(line) {
@@ -332,6 +334,9 @@ function flushBitfields(bitsToAdd = 32) {
 		const shiftRight = bitOffset ? " >> " + bitOffset : "";
 
 		if (doGet && !bitfield.name.startsWith(paddingPrefix)) {
+			if (bitfield.jsdocComment)
+				output.push(bitfield.jsdocComment);
+
 			output.add({
 				javascript: `   get ${bitfield.name}() {`,
 				typescript: `   get ${bitfield.name}(): ${bitfield.boolean ? "boolean" : "number"} {`,
@@ -344,6 +349,9 @@ function flushBitfields(bitsToAdd = 32) {
 		}
 
 		if (doSet && !bitfield.name.startsWith(paddingPrefix)) {
+			if (bitfield.jsdocComment)
+				output.push(bitfield.jsdocComment);
+
 			output.add({
 				javascript: `   set ${bitfield.name}(value) {`,
 				typescript: `   set ${bitfield.name}(value: ${bitfield.boolean ? "boolean" : "number"}) {`,
@@ -477,6 +485,14 @@ function setPragma(setting, value) {
 			comments = value;
 			break;
 
+		case "inject":
+			final.push(`${className ? '   ' : ''}${value};`);
+			break;
+
+		case "injectInterface":
+			injectInterface.push(`   ${value};`);
+			break;
+
 		case "import":
 			imports.push(`import ${value};`);
 			break;
@@ -522,12 +538,14 @@ function compileDataView(input, pragmas = {}) {
 	json = false;
 	bitfieldsLSB = true;
 	comments = "header";
+	jsdocComment = undefined;
 	header = "";
 	usesText = false;
 	usesEndianProxy = false;
 	usesViewArray = false;
 	conditionals = [{active: true, else: true}];
 	paddingPrefix = "__pad";
+	injectInterface = [];
 
 	final = [];
 	const errors = [];
@@ -647,13 +665,17 @@ function compileDataView(input, pragmas = {}) {
 
 					if (doSet) {
 						output.add({
-							javascript: `   static from(obj) {`,
-							typescript: `   static from(obj: object): ${className} {`
+							javascript: `   static from(obj, data) {`,
+							typescript: `   static from(obj: I${className}, data?: ${className}): ${className} {`
 						});
-						output.push(`      const result = new ${className};`);
-						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
 						if (superClassName)
-							output.push(`      super.from(obj);`)
+						output.add({
+								javascript: `      const result = super.from(obj, data ?? new ${className});`,
+								typescript: `      const result = <${className}> <unknown> super.from(obj, <${superClassName}> <unknown> (data ?? new ${className}));`
+							});
+						else
+							output.push(`      const result = data ?? new ${className};`);
+						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
 						output.push(`      return result;`);
 						output.push(`   }`);
 					}
@@ -664,6 +686,24 @@ function compileDataView(input, pragmas = {}) {
 				output.push(``);
 
 				const start = new Output;
+				if (injectInterface.length == 0)
+					start.add({
+						typescript: `export interface I${className} extends Omit<${className}, keyof DataView | 'toJSON'> {};`
+					});
+				else {
+					start.add({
+						typescript: `export interface I${className} extends Omit<${className}, keyof DataView | 'toJSON'> {`
+					});
+					injectInterface.forEach((inject) => {
+						start.add({ 
+							typescript: inject
+						})
+					});
+					start.add({
+						typescript: `};`
+					});
+					injectInterface = [];
+				}
 				start.push(`${doExport ? "export " : ""}class ${className} extends ${superClassName ?? extendsClass} {`);
 
 				let superByteLength = 0;
@@ -687,10 +727,7 @@ function compileDataView(input, pragmas = {}) {
 						typescript: `   constructor(data?: ArrayBufferLike, offset?: number, length?: number) {`
 					});
 
-					start.push(`      if (data)`);
-					start.push(`         super(data, offset ?? 0${limit});`);
-					start.push(`       else`);
-					start.push(`         super(new ArrayBuffer(${superByteLength + byteOffset}));`);
+					start.push(`      super(data ?? new ArrayBuffer(${superByteLength + byteOffset}), offset ?? 0${limit})`);
 
 					if (classUsesEndian) {
 						start.push(`      this.setUint8(0, 1);`);
@@ -820,10 +857,14 @@ function compileDataView(input, pragmas = {}) {
 				if (("header" === comments) && (1 === pos))
 					header = part;
 				else if ("true" === comments) {
-					if (className)
-						output.push('   ' + part);
-					else
-						final.push(part);
+					if (part.startsWith('/**') && className) 
+						jsdocComment = '   ' + part;
+					else {
+						if (className)
+							output.push('   ' + part);
+						else
+							final.push(part);
+					}
 				}
 				continue;
 			}
@@ -1049,6 +1090,9 @@ function compileDataView(input, pragmas = {}) {
 						classAlign = align;
 
 					if (doGet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   get ${name}() {`,
 							typescript: `   get ${name}(): ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `${type}Array`} {`
@@ -1077,6 +1121,9 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   set ${name}(value) {`,
 							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
@@ -1131,6 +1178,9 @@ function compileDataView(input, pragmas = {}) {
 						throw new Error(`char cannot use bitfield`);
 
 					if (doGet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   get ${name}() {`,
 							typescript: `   get ${name}(): string {`,
@@ -1147,6 +1197,9 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   set ${name}(value) {`,
 							typescript: `   set ${name}(value: string) {`,
@@ -1192,7 +1245,8 @@ function compileDataView(input, pragmas = {}) {
 
 					bitfields.push({
 						name,
-						bitCount
+						bitCount,
+						jsdocComment
 					});
 
 					if (!isPadding) {
@@ -1217,7 +1271,8 @@ function compileDataView(input, pragmas = {}) {
 					bitfields.push({
 						name,
 						bitCount: 1,
-						boolean: true
+						boolean: true,
+						jsdocComment
 					});
 
 					if (!isPadding) {
@@ -1244,6 +1299,9 @@ function compileDataView(input, pragmas = {}) {
 						endField(align - (byteOffset % align));
 
 					if (doGet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						if (undefined === arrayCount) {
 							output.add({
 								javascript: `   get ${name}() {`,
@@ -1267,6 +1325,9 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						if (undefined === arrayCount) {
 							output.add({
 								javascript: `   set ${name}(value) {`,
@@ -1306,6 +1367,8 @@ function compileDataView(input, pragmas = {}) {
 					}
 					} break;
 			}
+			jsdocComment = undefined;
+
 		}
 		catch (e) {
 			errors.push(`   ${e}, line ${map[pos]}: ${lines[map[pos] - 1]}`);
