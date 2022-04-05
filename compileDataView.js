@@ -678,9 +678,17 @@ function compileDataView(input, pragmas = {}) {
 					jsonOutput.length = 0;
 
 					if (doSet) {
+						let interfaceTypes = `I${className}`;
+						let parentClass = superClassName;
+						while (parentClass) {
+							interfaceTypes += ` & I${parentClass}`;
+							if (!classes[parentClass])
+								break;
+							parentClass = classes[parentClass].superClassName;
+						}
 						output.add({
 							javascript: `   static from(obj, data) {`,
-							typescript: `   static from(obj: I${className}, data?: ${className}): ${className} {`
+							typescript: `   static from(obj: ${interfaceTypes}, data?: ${className}): ${className} {`
 						});
 						if (superClassName)
 							output.add({
@@ -724,7 +732,7 @@ function compileDataView(input, pragmas = {}) {
 					parentClass = classes[parentClass].extendsClass;
 				}
 				if (outputByteLength)
-					start.push(`   static byteLength = ${superByteLength + byteOffset}`);
+					start.push(`   static byteLength = ${byteOffset}`);
 				if (classUsesEndian)
 					start.push(`   #endian;`);
 
@@ -732,13 +740,15 @@ function compileDataView(input, pragmas = {}) {
 					start.push(``);
 
 				if (byteOffset > 0) {
-					const limit = checkByteLength ? `, length ?? ${superByteLength + byteOffset}` : ", length";
 					start.add({
-						javascript: `   constructor(data, offset, length) {`,
-						typescript: `   constructor(data?: ArrayBufferLike, offset?: number, length?: number) {`
+						javascript: `   constructor(data, offset = 0, length = ${byteOffset}) {`,
+						typescript: `   constructor(data?: ArrayBufferLike, offset = 0, length = ${byteOffset}) {`
 					});
 
-					start.push(`      super(data ?? new ArrayBuffer(${superByteLength + byteOffset}), offset ?? 0${limit})`);
+					if (!superClassName)
+						start.push(`      super(data ?? new ArrayBuffer(offset + length), offset${checkByteLength ? ", length" : ""})`);
+					else
+						start.push(`      super(data, offset, length);`);
 
 					if (classUsesEndian) {
 						start.push(`      this.setUint8(0, 1);`);

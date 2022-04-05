@@ -176,9 +176,10 @@ struct MoreBase : ExtBase {
 };
 
 // example of using injections with type literals and inheritance in TypeScript
-enum TypeLiteral {
+enum TypeLiteral : uint8_t {
    One,
-   Two
+   Two,
+   Three
 };
 
 struct BaseLiteral {
@@ -186,19 +187,21 @@ struct BaseLiteral {
 };
 
 struct TypeOne : BaseLiteral {
-   #if defined(__LANGUAGE_TYPESCRIPT__)
-      #pragma injectInterface(type: TypeLiteral.One)
-   #endif
+   #pragma injectInterface(type: TypeLiteral.One)
    uint16_t somethingMore;
 };
 
 struct TypeTwo : BaseLiteral {
-   #if defined(__LANGUAGE_TYPESCRIPT__)
-      #pragma injectInterface(type: TypeLiteral.Two)
-   #endif
+   #pragma injectInterface(type: TypeLiteral.Two)
+};
+
+struct TypeThree : TypeOne {
+   #pragma injectInterface(type: TypeLiteral.Three)
+   uint32_t some;
+   uint8_t more;
 };
 
 #if defined(__LANGUAGE_TYPESCRIPT__)
-   #pragma inject(type BaseTypes = ITypeOne | ITypeTwo)
+   #pragma inject(type BaseTypes = ITypeOne | ITypeTwo | ITypeThree)
 #endif
 
