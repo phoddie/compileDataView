@@ -687,16 +687,20 @@ function compileDataView(input, pragmas = {}) {
 							parentClass = classes[parentClass].superClassName;
 						}
 						output.add({
-							javascript: `   static from(obj, data) {`,
-							typescript: `   static from(obj: ${interfaceTypes}, data?: ${className}): ${className} {`
+							javascript: `   static from(obj) {`,
+							typescript: `   static from(obj: ${interfaceTypes}): ${className} {`
 						});
 						if (superClassName)
 							output.add({
-									javascript: `      const result = super.from(obj, data ?? new ${className});`,
-									typescript: `      const result = <${className}> <unknown> super.from(obj, <${superClassName}> <unknown> (data ?? new ${className}));`
-								});
+								javascript: `      const result = super.from(obj);`,
+								typescript: `      const result = <${className}> super.from(obj);`
+							});
+							// output.add({
+							// 		javascript: `      const result = super.from(obj, data ?? new ${className});`,
+							// 		typescript: `      const result = <${className}> <unknown> super.from(obj, <${superClassName}> <unknown> (data ?? new ${className}));`
+							// 	});
 						else
-							output.push(`      const result = data ?? new ${className};`);
+							output.push(`      const result = new this();`);
 						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
 						output.push(`      return result;`);
 						output.push(`   }`);
