@@ -28,7 +28,7 @@
 
 */
 
-const Version = 2;
+const Version = 3;
 
 const byteCounts = {
 	Int8: 1,
@@ -89,6 +89,7 @@ const isTypedef = Symbol("typedef");
 const anonymous = Symbol("anonymous");
 
 let className;
+let superClassName;
 let classUsesEndian;
 let output;
 let classes;
@@ -119,6 +120,8 @@ let anonymousUnion;
 let json;
 let bitfieldsLSB;
 let comments;
+let jsdocComment;
+let jsdocClassComment;
 let header;
 let usesText;
 let usesEndianProxy;
@@ -126,6 +129,9 @@ let usesViewArray;
 let conditionals;
 let final;
 let paddingPrefix;
+let injectInterface;
+let exports;
+let includeSource;
 
 class Output extends Array {
 	add(line) {
@@ -134,7 +140,7 @@ class Output extends Array {
 			if (undefined === line)
 				throw new Error(`no generated code for ${language}`);
 		}
-		this.push(line);
+		if (line.length) this.push(line);
 	}
 }
 
@@ -331,6 +337,9 @@ function flushBitfields(bitsToAdd = 32) {
 		const shiftRight = bitOffset ? " >> " + bitOffset : "";
 
 		if (doGet && !bitfield.name.startsWith(paddingPrefix)) {
+			if (bitfield.jsdocComment)
+				output.push(bitfield.jsdocComment);
+
 			output.add({
 				javascript: `   get ${bitfield.name}() {`,
 				typescript: `   get ${bitfield.name}(): ${bitfield.boolean ? "boolean" : "number"} {`,
@@ -343,6 +352,9 @@ function flushBitfields(bitsToAdd = 32) {
 		}
 
 		if (doSet && !bitfield.name.startsWith(paddingPrefix)) {
+			if (bitfield.jsdocComment)
+				output.push(bitfield.jsdocComment);
+
 			output.add({
 				javascript: `   set ${bitfield.name}(value) {`,
 				typescript: `   set ${bitfield.name}(value: ${bitfield.boolean ? "boolean" : "number"}) {`,
@@ -476,8 +488,24 @@ function setPragma(setting, value) {
 			comments = value;
 			break;
 
+		case "inject":
+			if (jsdocClassComment) {
+				final.push(jsdocClassComment);
+				jsdocClassComment = "";
+			}
+			final.push(`${className ? '   ' : ''}${value};`);
+			break;
+
+		case "injectInterface":
+			injectInterface.push(`   ${value};`);
+			break;
+
 		case "import":
 			imports.push(`import ${value};`);
+			break;
+
+		case "includeSource":
+			includeSource = booleanSetting(value, setting);
 			break;
 
 		default:
@@ -490,6 +518,7 @@ const kDefaultPack = 16;
 
 function compileDataView(input, pragmas = {}) {
 	className = undefined;
+	superClassName = undefined;
 	classUsesEndian = false;
 	output = new Output;
 	properties = [];
@@ -520,12 +549,17 @@ function compileDataView(input, pragmas = {}) {
 	json = false;
 	bitfieldsLSB = true;
 	comments = "header";
+	jsdocComment = undefined;
+	jsdocClassComment = undefined;
 	header = "";
 	usesText = false;
 	usesEndianProxy = false;
 	usesViewArray = false;
 	conditionals = [{active: true, else: true}];
 	paddingPrefix = "__pad";
+	injectInterface = [];
+	exports = [];
+	includeSource = true;
 
 	final = [];
 	const errors = [];
@@ -576,15 +610,17 @@ function compileDataView(input, pragmas = {}) {
 						continue;
 					}
 				}
-				else
-				if (undefined !== enumState) {
+				else if (undefined !== enumState) {
 					if (anonymous !== className) {
-						const xsExport = doExport && ("xs" === platform) && ("typescript" === language);
+						exports.push(className);
+
 						output.add({
-							javascript: `${doExport ? "export " : ""}const ${className} = Object.freeze({`,
-							typescript: `${(doExport && !xsExport) ? "export " : ""}enum ${xsExport ? "__" : ""}${className} {`,
+							javascript: `const ${className} = Object.freeze({`,
+							typescript: `enum ${className} {`,
 						});
-						for (let [name, value] of enumState) {
+						for (let [name, { value, jsdocComment }] of enumState) {
+							if (jsdocComment)
+								output.push(jsdocComment);
 							if ("string" === typeof value)
 								value = '"' + value + '"';
 							output.add({
@@ -596,21 +632,19 @@ function compileDataView(input, pragmas = {}) {
 							javascript: `});`,
 							typescript: `}`,
 						});
-						if (xsExport) {
-							output.push(`Object.freeze(<Object>__${className});`);
-							output.push(`export const ${className} = __${className};`);
-						}
 						output.push(``);
 
 						final = final.concat(output);
 						output.length = 0;
+						const enumBackingType = TypeAliases[enumState.backingType];
+						const enumBackingBytes = byteCounts[enumBackingType];
 
 						classes[className] = {
-							byteLength: 4,
-							align: Math.min(pack, 4),		// enum is int
-							alignLength: 4 
+							byteLength:  enumBackingBytes,
+							align: Math.min(pack, enumBackingBytes),
+							alignLength: enumBackingBytes 
 						};
-						TypeAliases[className] = "Int32"
+						TypeAliases[className] = enumBackingType;
 					}
 
 					enumState = undefined;
@@ -618,9 +652,6 @@ function compileDataView(input, pragmas = {}) {
 					classUsesEndian = false;
 					continue;
 				}
-
-				if (!byteOffset)
-					throw new Error(`empty struct`);
 
 				if (isTypedef === className) {
 					className = validateName(parts[pos++]);
@@ -631,7 +662,7 @@ function compileDataView(input, pragmas = {}) {
 				if (";" !== parts[pos++])
 					throw new Error(`expected semicolon`);
 
-				if (json) {
+				if (json && byteOffset > 0) {
 					if (doGet) {
 						output.add({
 							javascript: `   toJSON() {`,
@@ -639,17 +670,37 @@ function compileDataView(input, pragmas = {}) {
 						});
 						output.push(`      return {`);
 						output = output.concat(jsonOutput);
+						if (superClassName)
+							output.push(`         ...super.toJSON()`);
 						output.push(`      };`);
 						output.push(`   }`);
 					}
 					jsonOutput.length = 0;
 
 					if (doSet) {
+						let interfaceTypes = `I${className}`;
+						let parentClass = superClassName;
+						while (parentClass) {
+							interfaceTypes += ` & I${parentClass}`;
+							if (!classes[parentClass])
+								break;
+							parentClass = classes[parentClass].superClassName;
+						}
 						output.add({
 							javascript: `   static from(obj) {`,
-							typescript: `   static from(obj: object): ${className} {`
+							typescript: `   static from(obj: ${interfaceTypes}): ${className} {`
 						});
-						output.push(`      const result = new ${className};`);
+						if (superClassName)
+							output.add({
+								javascript: `      const result = super.from(obj);`,
+								typescript: `      const result = <${className}> super.from(obj);`
+							});
+							// output.add({
+							// 		javascript: `      const result = super.from(obj, data ?? new ${className});`,
+							// 		typescript: `      const result = <${className}> <unknown> super.from(obj, <${superClassName}> <unknown> (data ?? new ${className}));`
+							// 	});
+						else
+							output.push(`      const result = new this();`);
 						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
 						output.push(`      return result;`);
 						output.push(`   }`);
@@ -661,31 +712,55 @@ function compileDataView(input, pragmas = {}) {
 				output.push(``);
 
 				const start = new Output;
-				start.push(`${doExport ? "export " : ""}class ${className} extends ${extendsClass} {`);
-				if (outputByteLength)
-					start.push(`   static byteLength = ${byteOffset};`);
+				if ("typescript" == language) {
+					exports.push("I" + className);
+					if (jsdocClassComment) start.push(jsdocClassComment);
+					if (injectInterface.length == 0)
+						start.push(`type I${className} = Omit<${className}, keyof DataView | "toJSON">;`);
+					else {
+						start.push(`interface I${className} extends Omit<${className}, keyof DataView | "toJSON"> {`);
+						injectInterface.forEach((inject) => start.push(inject));
+						start.push(`}`);
+						injectInterface = [];
+					}
+				}
+				if (jsdocClassComment) start.push(jsdocClassComment);
+				exports.push(className);
+				start.push(`class ${className} extends ${superClassName ?? extendsClass} {`);
+				jsdocClassComment = undefined;
 
+				let superByteLength = 0;
+				let parentClass = superClassName;
+				while (classes[parentClass]) {
+					superByteLength += classes[parentClass].byteLength;
+					parentClass = classes[parentClass].extendsClass;
+				}
+				if (outputByteLength)
+					start.push(`   static byteLength = ${byteOffset}`);
 				if (classUsesEndian)
 					start.push(`   #endian;`);
 
 				if (outputByteLength || classUsesEndian)
 					start.push(``);
 
-				const limit = checkByteLength ? `, ${byteOffset}` : "";
-				start.add({
-					javascript: `   constructor(data, offset) {`,
-					typescript: `   constructor(data?: ArrayBufferLike, offset?: number) {`
-				});
-				start.push(`      if (data)`);
-				start.push(`         super(data, offset ?? 0${limit});`);
-				start.push(`       else`);
-				start.push(`         super(new ArrayBuffer(${byteOffset}));`);
-				if (classUsesEndian) {
-					start.push(`      this.setUint8(0, 1);`);
-					start.push(`      this.#endian = 1 === this.getUint16(0, true);`);
-					start.push(`      this.setUint8[0] = 0;`);
+				if (byteOffset > 0) {
+					start.add({
+						javascript: `   constructor(data, offset = 0, length = ${byteOffset}) {`,
+						typescript: `   constructor(data?: ArrayBufferLike, offset = 0, length = ${byteOffset}) {`
+					});
+
+					if (!superClassName)
+						start.push(`      super(data ?? new ArrayBuffer(offset + length), offset${checkByteLength ? ", length" : ""})`);
+					else
+						start.push(`      super(data, offset, length);`);
+
+					if (classUsesEndian) {
+						start.push(`      this.setUint8(0, 1);`);
+						start.push(`      this.#endian = 1 === this.getUint16(0, true);`);
+						start.push(`      this.setUint8[0] = 0;`);
+					}
+					start.push(`   }`);
 				}
-				start.push(`   }`);
 
 				final = final.concat(start, output);
 
@@ -693,6 +768,8 @@ function compileDataView(input, pragmas = {}) {
 					byteLength: byteOffset,
 					align: classAlign,
 					alignLength: Math.ceil(byteOffset / classAlign) * classAlign,
+					superClassName,
+					superByteLength
 				};
 
 				output.length = 0;
@@ -700,6 +777,7 @@ function compileDataView(input, pragmas = {}) {
 				properties.length = 0;
 				className = undefined;
 				classAlign = 0;
+				superClassName = undefined;
 
 				continue;
 			}
@@ -738,16 +816,26 @@ function compileDataView(input, pragmas = {}) {
 				if (className)
 					throw new Error(`enum must be at root`);
 
+				let backingType = 'int32_t';
+
 				if ("{" !== parts[pos]) {
 					className = validateName(parts[pos++]);
 					if (classes[className])
 						throw new Error(`duplicate name "${enumState.name}"`);
+
+					if (':' == parts[pos]) {
+						backingType = parts[pos + 1];
+						if (!TypeAliases[backingType])
+							throw new Error(`unknown enum type ${backingType}`);
+						pos += 2;
+					}
 				}
 				else
 					className = anonymous;
 
 				enumState = new Map;
 				enumState.value = -1;
+				enumState.backingType = backingType;
 
 				if ("{" !== parts[pos++])
 					throw new Error(`open brace expected`);
@@ -778,17 +866,25 @@ function compileDataView(input, pragmas = {}) {
 				if (className)
 					throw new Error(`cannot nest structure`);
 
-				if ("{" !== parts[pos + 1])
-					throw new Error(`open brace expected`);
-
 				className = validateName(parts[pos]);
 				if (classes[className])
 					throw new Error(`duplicate class "${className}"`);
+
+				if (":" == parts[pos + 1]) {
+					superClassName = parts[pos + 2];
+					if (!classes[superClassName])
+						throw new Error(`unknown super class "${superClassName}"`)
+					byteOffset = classes[superClassName].byteLength;
+				}
+
+				if ("{" !== parts[pos + (superClassName ? 3 : 1)])
+					throw new Error(`open brace expected`);
+
 				classAlign = 1;
 				jsonOutput = new Output;
 				fromOutput = new Output;
 
-				pos += 2;
+				pos += (superClassName ? 4 : 2);
 				continue;
 			}
 
@@ -796,10 +892,17 @@ function compileDataView(input, pragmas = {}) {
 				if (("header" === comments) && (1 === pos))
 					header = part;
 				else if ("true" === comments) {
-					if (className)
-						output.push('   ' + part);
-					else
-						final.push(part);
+					if (part.startsWith('/**')) {
+						if (className)
+							jsdocComment = '   ' + part;
+						else
+							jsdocClassComment = '\n' + part;
+					} else {
+						if (className)
+							output.push('   ' + part);
+						else
+							final.push(part);
+					}
 				}
 				continue;
 			}
@@ -852,7 +955,13 @@ function compileDataView(input, pragmas = {}) {
 								return "defined" !== property;
 							},
 							get(target, property) {
-								return ("__COMPILEDATAVIEW__" === property) ? ${Version} : undefined;
+								if ("__COMPILEDATAVIEW__" == property)
+									return "${Version}";
+								if ("__LANGUAGE_${language.toUpperCase()}__" == property)		
+									return true;
+								if ("__PLATFORM_${platform.toUpperCase()}__" == property)
+									return true;
+								return undefined;
 							}
 						});
 						const defined = function(t) {return undefined !== t};
@@ -941,7 +1050,8 @@ function compileDataView(input, pragmas = {}) {
 					throw new Error(`duplicate enum: ${part}`);
 				enums.add(part);
 
-				enumState.set(part, value);
+				enumState.set(part, { value, jsdocComment });
+				jsdocComment = undefined;
 
 				if ("string" === typeof value)
 					value = '"' + value + '"';
@@ -1025,6 +1135,9 @@ function compileDataView(input, pragmas = {}) {
 						classAlign = align;
 
 					if (doGet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   get ${name}() {`,
 							typescript: `   get ${name}(): ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `${type}Array`} {`
@@ -1053,6 +1166,9 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   set ${name}(value) {`,
 							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
@@ -1107,6 +1223,9 @@ function compileDataView(input, pragmas = {}) {
 						throw new Error(`char cannot use bitfield`);
 
 					if (doGet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   get ${name}() {`,
 							typescript: `   get ${name}(): string {`,
@@ -1123,6 +1242,9 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						output.add({
 							javascript: `   set ${name}(value) {`,
 							typescript: `   set ${name}(value: string) {`,
@@ -1168,7 +1290,8 @@ function compileDataView(input, pragmas = {}) {
 
 					bitfields.push({
 						name,
-						bitCount
+						bitCount,
+						jsdocComment
 					});
 
 					if (!isPadding) {
@@ -1193,7 +1316,8 @@ function compileDataView(input, pragmas = {}) {
 					bitfields.push({
 						name,
 						bitCount: 1,
-						boolean: true
+						boolean: true,
+						jsdocComment
 					});
 
 					if (!isPadding) {
@@ -1220,6 +1344,9 @@ function compileDataView(input, pragmas = {}) {
 						endField(align - (byteOffset % align));
 
 					if (doGet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						if (undefined === arrayCount) {
 							output.add({
 								javascript: `   get ${name}() {`,
@@ -1243,6 +1370,9 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
+						if (jsdocComment)
+							output.push(jsdocComment);
+
 						if (undefined === arrayCount) {
 							output.add({
 								javascript: `   set ${name}(value) {`,
@@ -1282,6 +1412,8 @@ function compileDataView(input, pragmas = {}) {
 					}
 					} break;
 			}
+			jsdocComment = undefined;
+
 		}
 		catch (e) {
 			errors.push(`   ${e}, line ${map[pos]}: ${lines[map[pos] - 1]}`);
@@ -1309,10 +1441,37 @@ function compileDataView(input, pragmas = {}) {
 	if (usesViewArray)
 		final.push(ViewArray);
 
-	final.push("/*");
-	final.push(`\tView classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
-	final.push("*/");
-	final.push(input.replace(/^|\n/g, '\n// '));
+	if (exports.length && doExport) {
+		final.push("");
+		let exportLine = "export { ";
+		if (exports.length > 3) {
+			final.push(exportLine);
+			exportLine = "";
+		}
+		for (let i = 0; i < exports.length; ++i) {
+			if (exportLine.length > 80) {
+				final.push("   " + exportLine);
+				exportLine = "";
+			}
+			exportLine = exportLine + exports[i] + ((i < (exports.length - 1)) ? ', ' : '');
+		}
+		if (exportLine != "") {
+			if (exports.length <= 3)
+				final.push(exportLine + " };");
+			else {
+				final.push("   " + exportLine);
+				final.push("};");
+			}
+		}
+	}
+
+	if (includeSource) {
+		final.push("");
+		final.push("/*");
+		final.push(`\tView classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
+		final.push("*/");
+		final.push(input.replace(/^|\n/g, '\n// '));
+	}
 
 	if (errors.length) {
 		errors.unshift("/*")
