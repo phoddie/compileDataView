@@ -131,7 +131,7 @@ let final;
 let paddingPrefix;
 let injectInterface;
 let exports;
-let includeSource;
+let outputSource;
 
 class Output extends Array {
 	add(line) {
@@ -141,6 +141,12 @@ class Output extends Array {
 				throw new Error(`no generated code for ${language}`);
 		}
 		if (line.length) this.push(line);
+	}
+	push(value, etc) {
+		if (etc) throw new Error("unexpected");
+		if (undefined === value)
+			return;
+		super.push(value);
 	}
 }
 
@@ -352,8 +358,7 @@ function flushBitfields(bitsToAdd = 32) {
 		}
 
 		if (doSet && !bitfield.name.startsWith(paddingPrefix)) {
-			if (bitfield.jsdocComment)
-				output.push(bitfield.jsdocComment);
+			output.push(bitfield.jsdocComment);
 
 			output.add({
 				javascript: `   set ${bitfield.name}(value) {`,
@@ -504,8 +509,8 @@ function setPragma(setting, value) {
 			imports.push(`import ${value};`);
 			break;
 
-		case "includeSource":
-			includeSource = booleanSetting(value, setting);
+		case "outputSource":
+			outputSource = booleanSetting(value, setting);
 			break;
 
 		default:
@@ -559,7 +564,7 @@ function compileDataView(input, pragmas = {}) {
 	paddingPrefix = "__pad";
 	injectInterface = [];
 	exports = [];
-	includeSource = true;
+	outputSource = true;
 
 	final = [];
 	const errors = [];
@@ -619,8 +624,7 @@ function compileDataView(input, pragmas = {}) {
 							typescript: `enum ${className} {`,
 						});
 						for (let [name, { value, jsdocComment }] of enumState) {
-							if (jsdocComment)
-								output.push(jsdocComment);
+							output.push(jsdocComment);
 							if ("string" === typeof value)
 								value = '"' + value + '"';
 							output.add({
@@ -662,7 +666,7 @@ function compileDataView(input, pragmas = {}) {
 				if (";" !== parts[pos++])
 					throw new Error(`expected semicolon`);
 
-				if (json && byteOffset > 0) {
+				if (json && byteOffset) {
 					if (doGet) {
 						output.add({
 							javascript: `   toJSON() {`,
@@ -679,13 +683,8 @@ function compileDataView(input, pragmas = {}) {
 
 					if (doSet) {
 						let interfaceTypes = `I${className}`;
-						let parentClass = superClassName;
-						while (parentClass) {
+						for (let parentClass = superClassName; parentClass; parentClass = classes[parentClass]?.superClassName)
 							interfaceTypes += ` & I${parentClass}`;
-							if (!classes[parentClass])
-								break;
-							parentClass = classes[parentClass].superClassName;
-						}
 						output.add({
 							javascript: `   static from(obj) {`,
 							typescript: `   static from(obj: ${interfaceTypes}): ${className} {`
@@ -695,10 +694,6 @@ function compileDataView(input, pragmas = {}) {
 								javascript: `      const result = super.from(obj);`,
 								typescript: `      const result = <${className}> super.from(obj);`
 							});
-							// output.add({
-							// 		javascript: `      const result = super.from(obj, data ?? new ${className});`,
-							// 		typescript: `      const result = <${className}> <unknown> super.from(obj, <${superClassName}> <unknown> (data ?? new ${className}));`
-							// 	});
 						else
 							output.push(`      const result = new this();`);
 						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
@@ -714,7 +709,7 @@ function compileDataView(input, pragmas = {}) {
 				const start = new Output;
 				if ("typescript" == language) {
 					exports.push("I" + className);
-					if (jsdocClassComment) start.push(jsdocClassComment);
+					start.push(jsdocClassComment);
 					if (injectInterface.length == 0)
 						start.push(`type I${className} = Omit<${className}, keyof DataView | "toJSON">;`);
 					else {
@@ -724,17 +719,15 @@ function compileDataView(input, pragmas = {}) {
 						injectInterface = [];
 					}
 				}
-				if (jsdocClassComment) start.push(jsdocClassComment);
+				start.push(jsdocClassComment);
 				exports.push(className);
 				start.push(`class ${className} extends ${superClassName ?? extendsClass} {`);
 				jsdocClassComment = undefined;
 
 				let superByteLength = 0;
-				let parentClass = superClassName;
-				while (classes[parentClass]) {
+				for (let parentClass = superClassName; classes[parentClass]; parentClass = classes[parentClass].extendsClass)  
 					superByteLength += classes[parentClass].byteLength;
-					parentClass = classes[parentClass].extendsClass;
-				}
+
 				if (outputByteLength)
 					start.push(`   static byteLength = ${byteOffset}`);
 				if (classUsesEndian)
@@ -897,7 +890,8 @@ function compileDataView(input, pragmas = {}) {
 							jsdocComment = '   ' + part;
 						else
 							jsdocClassComment = '\n' + part;
-					} else {
+					}
+					else {
 						if (className)
 							output.push('   ' + part);
 						else
@@ -908,7 +902,7 @@ function compileDataView(input, pragmas = {}) {
 			}
 
 			if ("#pragma" === part) {
-				let setting = parts[pos++];
+				const setting = parts[pos++];
 				if ("(" !== parts[pos++])
 					throw new Error(`open parenthesis expected`);
 
@@ -1135,8 +1129,7 @@ function compileDataView(input, pragmas = {}) {
 						classAlign = align;
 
 					if (doGet && !isPadding) {
-						if (jsdocComment)
-							output.push(jsdocComment);
+						output.push(jsdocComment);
 
 						output.add({
 							javascript: `   get ${name}() {`,
@@ -1166,8 +1159,7 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
-						if (jsdocComment)
-							output.push(jsdocComment);
+						output.push(jsdocComment);
 
 						output.add({
 							javascript: `   set ${name}(value) {`,
@@ -1223,8 +1215,7 @@ function compileDataView(input, pragmas = {}) {
 						throw new Error(`char cannot use bitfield`);
 
 					if (doGet && !isPadding) {
-						if (jsdocComment)
-							output.push(jsdocComment);
++						output.push(jsdocComment);
 
 						output.add({
 							javascript: `   get ${name}() {`,
@@ -1242,8 +1233,7 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
-						if (jsdocComment)
-							output.push(jsdocComment);
+						output.push(jsdocComment);
 
 						output.add({
 							javascript: `   set ${name}(value) {`,
@@ -1344,8 +1334,7 @@ function compileDataView(input, pragmas = {}) {
 						endField(align - (byteOffset % align));
 
 					if (doGet && !isPadding) {
-						if (jsdocComment)
-							output.push(jsdocComment);
+						output.push(jsdocComment);
 
 						if (undefined === arrayCount) {
 							output.add({
@@ -1370,8 +1359,7 @@ function compileDataView(input, pragmas = {}) {
 					}
 
 					if (doSet && !isPadding) {
-						if (jsdocComment)
-							output.push(jsdocComment);
+						output.push(jsdocComment);
 
 						if (undefined === arrayCount) {
 							output.add({
@@ -1465,7 +1453,7 @@ function compileDataView(input, pragmas = {}) {
 		}
 	}
 
-	if (includeSource) {
+	if (outputSource) {
 		final.push("");
 		final.push("/*");
 		final.push(`\tView classes generated by https://phoddie.github.io/compileDataView on ${new Date} from the following description:`);
