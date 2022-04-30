@@ -6,6 +6,7 @@
    #pragma json(true)                  // include JSON methods
    #pragma language(typescript/node)   // use TypeScript with Node style string buffers
    #pragma outputByteLength(true)      // include length of structures in output
+   #pragma strictFrom(true)            // require all properties on 'from` methods
 #endif
 
 // Line comments are always ignored

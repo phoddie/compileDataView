@@ -215,7 +215,7 @@ let i = IntroView.from({
 });
 ```
 
-To use the `from` feature, set `#pragma json(true)` when compiling the view.
+To use the `from` feature, set `#pragma json(true)` when compiling the view.  When generating TypeScript, you can optionally use [`#pragma strictFrom(true)`](#strictFrom) to require all fields (versus the default of all fields are optional).
 
 <a id="stringify"></a>
 #### Serializing a binary data structure to JSON
@@ -557,6 +557,7 @@ The following pragmas are available (first option is the default):
 - [`outputByteLength(false | true)`](#outputbytelength)
 - [`outputSource(true | false)`](#outputsource)
 - [`pack(16 | 8 | 4 | 2 | 1)`](#pack)
+- ['strictFrom(false | true)`](#strictFrom)
 
 #### `extends`
 The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
@@ -766,6 +767,11 @@ import { myMethod } from "./MyClass";
 ```
 
 Import pragmas may be placed anywhere in the content, but are always be injected at the top of the file (after the first comment if provided).
+
+<a id="strictFrom"></a>
+#### `strictFrom`
+
+When generating TypeScript and using the pragma `json` to generate the `from` method (see [initialize](#initialize)), this option will change the types to require all properties (using the utility type `Required`).  The default (`false`) is to allow a subset of properties to be provided (using the utility type `Partial`).  
 
 <!--
 #### `inject` and `injectInterface`

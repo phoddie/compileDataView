@@ -71,6 +71,8 @@ const TypeAliases = {
 	bool: "Boolean"
 };
 
+const EnumTypes = [];
+
 const TypeScriptTypeAliases = {
 	Uint8: "number",
 	Uint16: "number",
@@ -132,6 +134,7 @@ let paddingPrefix;
 let injectInterface;
 let exports;
 let outputSource;
+let strictFrom;
 
 class Output extends Array {
 	add(line) {
@@ -513,7 +516,11 @@ function setPragma(setting, value) {
 			outputSource = booleanSetting(value, setting);
 			break;
 
-		default:
+		case 'strictFrom':
+			strictFrom = booleanSetting(value, setting);
+			break;
+
+        default:
 			throw new Error(`unknown pragma "${setting}"`);
 			break;
 	}
@@ -565,6 +572,7 @@ function compileDataView(input, pragmas = {}) {
 	injectInterface = [];
 	exports = [];
 	outputSource = true;
+	strictFrom = false;
 
 	final = [];
 	const errors = [];
@@ -649,6 +657,7 @@ function compileDataView(input, pragmas = {}) {
 							alignLength: enumBackingBytes 
 						};
 						TypeAliases[className] = enumBackingType;
+                        EnumTypes.push(className);
 					}
 
 					enumState = undefined;
@@ -687,7 +696,7 @@ function compileDataView(input, pragmas = {}) {
 							interfaceTypes += ` & I${parentClass}`;
 						output.add({
 							javascript: `   static from(obj) {`,
-							typescript: `   static from(obj: ${interfaceTypes}): ${className} {`
+							typescript: `   static from(obj: ${strictFrom ? 'Required' : 'Partial'}<${interfaceTypes}>): ${className} {`
 						});
 						if (superClassName)
 							output.add({
@@ -1092,6 +1101,7 @@ function compileDataView(input, pragmas = {}) {
 			if (";" !== parts[pos++])
 				throw new Error(`expected semicolon`);
 
+            let typescriptType = EnumTypes[EnumTypes.indexOf(type)];
 			if (TypeAliases[type])
 				type = TypeAliases[type];
 
@@ -1133,7 +1143,7 @@ function compileDataView(input, pragmas = {}) {
 
 						output.add({
 							javascript: `   get ${name}() {`,
-							typescript: `   get ${name}(): ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `${type}Array`} {`
+							typescript: `   get ${name}(): ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `${type}Array`} {`
 						});
 						if (undefined === arrayCount) {
 							if (1 === byteCount)
@@ -1163,7 +1173,7 @@ function compileDataView(input, pragmas = {}) {
 
 						output.add({
 							javascript: `   set ${name}(value) {`,
-							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
+							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
 						});
 						output.push();
 						if (undefined === arrayCount) {
