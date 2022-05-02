@@ -415,6 +415,24 @@ i.str = "12"; // ok
 i.str = "123456789"; // throws
 ```
 
+<a id="pointers"></a>
+#### Variable length data at the end of the struct
+
+Some data structures, common with networking protocols, consist of a header followed by an arbitrary length collection of bytes.  This can be implemented in a `struct` using the `char *` notation.  You can have only one of these per `struct`, and it must be the last member defined.  It also may not be [inherited](#inheritance) (it must be the final subclass). 
+
+```js
+struct MyStruct : SuperStruct {
+   uint32_t someData;
+   char *data;
+}
+```
+
+To instantiate a new object that has the correct length buffer, use the static [`from`](#json) method which will determine the size of the provided `ArrayBuffer` to allocate the correct buffer size.
+
+```js
+MyStruct.from({ someData: 32, data: myArrayBuffer });
+```
+
 <a id="type-nested"></a>
 #### Nested types
 View declared in a description can be nested in views that follow it by using the class name as the type.

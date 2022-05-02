@@ -206,3 +206,20 @@ struct TypeThree : TypeOne {
    #pragma inject(type BaseTypes = ITypeOne | ITypeTwo | ITypeThree)
 #endif
 
+/* Example of using variable size data (ArrayBuffer) at end of a struct */
+struct Variable {
+   uint16_t one;
+   uint32_t two;
+   char three;
+   char *data;
+};
+
+struct SuperVariable {
+   uint16_t myNumber;
+};
+
+struct SubVariable : SuperVariable {
+   uint32_t more;
+   char *data;
+};
+
