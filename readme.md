@@ -415,15 +415,15 @@ i.str = "12"; // ok
 i.str = "123456789"; // throws
 ```
 
-<a id="pointers"></a>
-#### Variable length data at the end of the struct
+<a id="flexible-array-members"></a>
+#### Flexible array members
 
-Some data structures, common with networking protocols, consist of a header followed by an arbitrary length collection of bytes.  This can be implemented in a `struct` using the `char *` notation.  You can have only one of these per `struct`, and it must be the last member defined.  It also may not be [inherited](#inheritance) (it must be the final subclass). 
+Some data structures, common with networking protocols, consist of a header followed by an arbitrary length collection of bytes.  This can be implemented in a `struct` using the `uint8_t var[]` notation (empty array).  You can have only one of these per `struct`, and it must be the last member defined.  It also may not be [inherited](#inheritance) (it must be the final subclass). 
 
 ```js
 struct MyStruct : SuperStruct {
    uint32_t someData;
-   char *data;
+   uint8_t data[];
 }
 ```
 

@@ -135,7 +135,7 @@ let injectInterface;
 let exports;
 let outputSource;
 let strictFrom;
-let classCharPointer;
+let flexibleArrayMember;
 
 class Output extends Array {
 	add(line) {
@@ -574,7 +574,7 @@ function compileDataView(input, pragmas = {}) {
 	exports = [];
 	outputSource = true;
 	strictFrom = false;
-	classCharPointer = undefined;
+	flexibleArrayMember = undefined;
 
 	final = [];
 	const errors = [];
@@ -703,7 +703,7 @@ function compileDataView(input, pragmas = {}) {
 						if (superClassName)
 							output.add({
 								javascript: `      const result = super.from(obj, size);`,
-								typescript: `      const result = <${className}> super.from(obj, size${classCharPointer ? " + (<" + className + "> obj)." + classCharPointer + ".byteLength" : ""});`
+								typescript: `      const result = <${className}> super.from(obj, size${flexibleArrayMember ? " + (<" + className + "> obj)." + flexibleArrayMember + ".byteLength" : ""});`
 							});
 						else
 							output.push(`      const result = new this(undefined, 0, size);`);
@@ -712,7 +712,7 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 					fromOutput.length = 0;
-					classCharPointer = undefined;
+					flexibleArrayMember = undefined;
 				}
 
 				output.push(`}`);
@@ -1068,14 +1068,6 @@ function compileDataView(input, pragmas = {}) {
 
 			
 			let type = part;
-			if ("*" == parts[pos]) {
-				if ("char" != type)
-					throw new Error(`Pointers are only allowed on "char *", but found on "${type} *"`);
-				if (classCharPointer)
-					throw new Error(`Only one "char *" variable is allowed in a struct`);
-				++pos;
-				classCharPointer = parts[pos];
-			}
 			let name = validateName(parts[pos++]);
 			const isPadding = name.startsWith(paddingPrefix);
 
@@ -1087,21 +1079,30 @@ function compileDataView(input, pragmas = {}) {
 			}
 			else {
 				if ("[" == parts[pos]) {
-					const bracket = parts.indexOf("]", pos + 1);
-					if (bracket < 0)
-						throw new Error(`right brace expected`);
+					if ("]" == parts[pos + 1]) {
+						pos = pos + 2;
+						if ("uint8_t" != type)
+							throw new Error(`Flexible array members ("[]") are only allowed on "uint8_t", but found on "${type}"`);
+						if (flexibleArrayMember)
+							throw new Error(`Only one flexible array member ("[]") is allowed in a struct`);
+						flexibleArrayMember = name;
+					} else {
+						const bracket = parts.indexOf("]", pos + 1);
+						if (bracket < 0)
+							throw new Error(`right brace expected`);
 
-					const expression = parts.slice(pos + 1, bracket).join(" ");
-					let context = "(function () {\n" + enumContext;
-					context += `return ${expression};\n`;
-					context += `})();`
+						const expression = parts.slice(pos + 1, bracket).join(" ");
+						let context = "(function () {\n" + enumContext;
+						context += `return ${expression};\n`;
+						context += `})();`
 
-					arrayCount = eval(context);
-					pos = bracket + 1;
+						arrayCount = eval(context);
+						pos = bracket + 1;
 
-					arrayCount = Math.round(arrayCount);
-					if ((arrayCount <= 0) || isNaN(arrayCount) || (Infinity === arrayCount))
-						throw new Error(`invalid array count`);
+						arrayCount = Math.round(arrayCount);
+						if ((arrayCount <= 0) || isNaN(arrayCount) || (Infinity === arrayCount))
+							throw new Error(`invalid array count`);
+					}
 				}
 			}
 
@@ -1149,6 +1150,9 @@ function compileDataView(input, pragmas = {}) {
 					if (classAlign < align)
 						classAlign = align;
 
+					if (flexibleArrayMember)
+						typescriptType = 'ArrayBuffer';
+
 					if (doGet && !isPadding) {
 						output.push(jsdocComment);
 
@@ -1156,7 +1160,9 @@ function compileDataView(input, pragmas = {}) {
 							javascript: `   get ${name}() {`,
 							typescript: `   get ${name}(): ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `${type}Array`} {`
 						});
-						if (undefined === arrayCount) {
+						if (flexibleArrayMember) 
+							output.push(`      return this.buffer.slice(${byteOffset});`);
+						else if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      return this.get${type}(${byteOffset});`);
 							else {
@@ -1187,7 +1193,9 @@ function compileDataView(input, pragmas = {}) {
 							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
 						});
 						output.push();
-						if (undefined === arrayCount) {
+						if (flexibleArrayMember)
+							output.push(`      new Uint8Array(this.buffer).set(new Uint8Array(value), ${byteOffset});`);
+						else if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      this.set${type}(${byteOffset}, value);`);
 							else {
@@ -1214,7 +1222,8 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 
-					endField((arrayCount ?? 1) * byteCount);
+					if (!flexibleArrayMember)
+						endField((arrayCount ?? 1) * byteCount);
 
 					if (!isPadding) {
 						if (undefined === arrayCount)
@@ -1240,11 +1249,9 @@ function compileDataView(input, pragmas = {}) {
 
 						output.add({
 							javascript: `   get ${name}() {`,
-							typescript: `   get ${name}(): ${classCharPointer ? "ArrayBuffer" : "string"}  {`,
+							typescript: `   get ${name}(): string {`,
 						});
-						if (classCharPointer) 
-							output.push(`      return this.buffer.slice(${byteOffset});`);
-						else if ((undefined === arrayCount) || (1 === arrayCount))
+						if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      return String.fromCharCode(this.getUint8(${byteOffset}));`);
 						else {
 							if ("xs" === platform)
@@ -1260,12 +1267,10 @@ function compileDataView(input, pragmas = {}) {
 
 						output.add({
 							javascript: `   set ${name}(value) {`,
-							typescript: `   set ${name}(value: ${classCharPointer ? "ArrayBuffer" : "string"}) {`,
+							typescript: `   set ${name}(value: string) {`,
 						});
 						output.push();
-						if (classCharPointer)
-							output.push(`      new Uint8Array(this.buffer).set(new Uint8Array(value), ${byteOffset});`);
-						else if ((undefined === arrayCount) || (1 === arrayCount))
+						if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      this.setUint8(${byteOffset}, value.charCodeAt(0));`);
 						else {
 							if ("xs" === platform)
@@ -1283,8 +1288,7 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 
-					if (!classCharPointer)
-						endField(arrayCount ?? 1);
+					endField(arrayCount ?? 1);
 
 					if (!isPadding) {
 						jsonOutput.push(`         ${name}: this.${name},`);
