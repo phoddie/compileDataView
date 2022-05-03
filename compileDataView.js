@@ -698,7 +698,7 @@ function compileDataView(input, pragmas = {}) {
 							interfaceTypes += ` & I${parentClass}`;
 						output.add({
 							javascript: `   static from(obj, size) {`,
-							typescript: `   static from(obj: ${strictFrom ? 'Required' : 'Partial'}<${interfaceTypes}>, size=${byteOffset}): ${className} {`
+							typescript: `   static from(obj: ${strictFrom ? 'Required' : 'Partial'}<${interfaceTypes}>, size = ${byteOffset}): ${className} {`
 						});
 						if (superClassName)
 							output.add({
@@ -750,14 +750,14 @@ function compileDataView(input, pragmas = {}) {
 
 				if (byteOffset > 0) {
 					start.add({
-						javascript: `   constructor(data, offset = 0, length = ${byteOffset}) {`,
-						typescript: `   constructor(data?: ArrayBufferLike, offset = 0, length = ${byteOffset}) {`
+						javascript: `   constructor(data, offset = 0, length) {`,
+						typescript: `   constructor(data?: ArrayBufferLike, offset = 0, length?: number) {`
 					});
 
 					if (!superClassName)
-						start.push(`      super(data ?? new ArrayBuffer(offset + length), offset${checkByteLength ? ", length" : ""})`);
+						start.push(`      super(data ?? new ArrayBuffer(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? data?.byteLength ?? " + byteOffset : ""})`);
 					else
-						start.push(`      super(data, offset, length);`);
+						start.push(`      super(data, offset, length ?? data?.byteLength ?? ${byteOffset});`);
 
 					if (classUsesEndian) {
 						start.push(`      this.setUint8(0, 1);`);
