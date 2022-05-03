@@ -135,7 +135,7 @@ let injectInterface;
 let exports;
 let outputSource;
 let strictFrom;
-let classHasPointer;
+let classCharPointer;
 
 class Output extends Array {
 	add(line) {
@@ -574,7 +574,7 @@ function compileDataView(input, pragmas = {}) {
 	exports = [];
 	outputSource = true;
 	strictFrom = false;
-	classHasPointer = false;
+	classCharPointer = undefined;
 
 	final = [];
 	const errors = [];
@@ -703,7 +703,7 @@ function compileDataView(input, pragmas = {}) {
 						if (superClassName)
 							output.add({
 								javascript: `      const result = super.from(obj, size);`,
-								typescript: `      const result = <${className}> super.from(obj, size${classHasPointer ? " + (<" + className + "> obj).data.byteLength" : ""});`
+								typescript: `      const result = <${className}> super.from(obj, size${classCharPointer ? " + (<" + className + "> obj)." + classCharPointer + ".byteLength" : ""});`
 							});
 						else
 							output.push(`      const result = new this(undefined, 0, size);`);
@@ -712,7 +712,7 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 					fromOutput.length = 0;
-					classHasPointer = false;
+					classCharPointer = undefined;
 				}
 
 				output.push(`}`);
@@ -1071,10 +1071,10 @@ function compileDataView(input, pragmas = {}) {
 			if ("*" == parts[pos]) {
 				if ("char" != type)
 					throw new Error(`Pointers are only allowed on "char *", but found on "${type} *"`);
-				if (classHasPointer)
+				if (classCharPointer)
 					throw new Error(`Only one "char *" variable is allowed in a struct`);
 				++pos;
-				classHasPointer = true;
+				classCharPointer = parts[pos];
 			}
 			let name = validateName(parts[pos++]);
 			const isPadding = name.startsWith(paddingPrefix);
@@ -1240,9 +1240,9 @@ function compileDataView(input, pragmas = {}) {
 
 						output.add({
 							javascript: `   get ${name}() {`,
-							typescript: `   get ${name}(): ${classHasPointer ? "ArrayBuffer" : "string"}  {`,
+							typescript: `   get ${name}(): ${classCharPointer ? "ArrayBuffer" : "string"}  {`,
 						});
-						if (classHasPointer) 
+						if (classCharPointer) 
 							output.push(`      return this.buffer.slice(${byteOffset});`);
 						else if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      return String.fromCharCode(this.getUint8(${byteOffset}));`);
@@ -1260,10 +1260,10 @@ function compileDataView(input, pragmas = {}) {
 
 						output.add({
 							javascript: `   set ${name}(value) {`,
-							typescript: `   set ${name}(value: ${classHasPointer ? "ArrayBuffer" : "string"}) {`,
+							typescript: `   set ${name}(value: ${classCharPointer ? "ArrayBuffer" : "string"}) {`,
 						});
 						output.push();
-						if (classHasPointer)
+						if (classCharPointer)
 							output.push(`      new Uint8Array(this.buffer).set(new Uint8Array(value), ${byteOffset});`);
 						else if ((undefined === arrayCount) || (1 === arrayCount))
 							output.push(`      this.setUint8(${byteOffset}, value.charCodeAt(0));`);
@@ -1283,7 +1283,8 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 
-					endField(arrayCount ?? 1);
+					if (!classCharPointer)
+						endField(arrayCount ?? 1);
 
 					if (!isPadding) {
 						jsonOutput.push(`         ${name}: this.${name},`);
