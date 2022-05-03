@@ -755,9 +755,9 @@ function compileDataView(input, pragmas = {}) {
 					});
 
 					if (!superClassName)
-						start.push(`      super(data ?? new ArrayBuffer(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? data?.byteLength ?? " + byteOffset : ""})`);
+						start.push(`      super(data ?? new ArrayBuffer(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? (data ? data.byteLength - offset : " + byteOffset + "))" : ""}`);
 					else
-						start.push(`      super(data, offset, length ?? data?.byteLength ?? ${byteOffset});`);
+						start.push(`      super(data, offset, length ?? (data ? data.byteLength - offset : ${byteOffset}));`);
 
 					if (classUsesEndian) {
 						start.push(`      this.setUint8(0, 1);`);
