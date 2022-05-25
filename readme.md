@@ -575,7 +575,8 @@ The following pragmas are available (first option is the default):
 - [`outputByteLength(false | true)`](#outputbytelength)
 - [`outputSource(true | false)`](#outputsource)
 - [`pack(16 | 8 | 4 | 2 | 1)`](#pack)
-- ['strictFrom(false | true)`](#strictFrom)
+- [`strictFrom(false | true)`](#strictFrom)
+- [`useSharedArrayBuffer(false | true)`](#useSharedArrayBuffer)
 
 #### `extends`
 The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
@@ -790,6 +791,11 @@ Import pragmas may be placed anywhere in the content, but are always be injected
 #### `strictFrom`
 
 When generating TypeScript and using the pragma `json` to generate the `from` method (see [initialize](#initialize)), this option will change the types to require all properties (using the utility type `Required`).  The default (`false`) is to allow a subset of properties to be provided (using the utility type `Partial`).  
+
+<a id="useSharedArrayBuffer"></a>
+#### `useSharedArrayBuffer`
+
+By default, `ArrayBuffer` is used for all buffer allocations.  Setting `useSharedArrayBuffer` to `true` will instead use a `SharedArrayBuffer` for allocations.  This is useful for sharing memory across workers as well as to use  the system heap for memory allocations (a separate memory domain on Moddable) instead of chunks.  This pragma may be turned on/off throughout the file to switch the allocation type used on a per-element basis.
 
 <!--
 #### `inject` and `injectInterface`

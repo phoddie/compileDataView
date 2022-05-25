@@ -113,6 +113,7 @@ let extendsClass;
 let imports;
 let outputByteLength;
 let checkByteLength;
+let useSharedArrayBuffer;
 let union;
 let enumState;
 let enums;
@@ -478,6 +479,10 @@ function setPragma(setting, value) {
 			checkByteLength = booleanSetting(value, setting);
 			break;
 
+		case "useSharedArrayBuffer":
+			useSharedArrayBuffer = booleanSetting(value, setting);
+			break;
+
 		case "json":
 			json = booleanSetting(value, setting);
 			break;
@@ -553,6 +558,7 @@ function compileDataView(input, pragmas = {}) {
 	imports = [];
 	outputByteLength = false;
 	checkByteLength = true;
+	useSharedArrayBuffer = false;
 	union = undefined;
 	enumState = undefined;
 	enums = new Set;
@@ -645,6 +651,9 @@ function compileDataView(input, pragmas = {}) {
 						output.add({
 							javascript: `});`,
 							typescript: `}`,
+						});
+						output.add({
+							typescript: `(<unknown> ${className}) = Object.freeze(${className});`,
 						});
 						output.push(``);
 
@@ -755,7 +764,7 @@ function compileDataView(input, pragmas = {}) {
 					});
 
 					if (!superClassName)
-						start.push(`      super(data ?? new ArrayBuffer(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? (data ? data.byteLength - offset : " + byteOffset + "))" : ""}`);
+						start.push(`      super(data ?? new ${useSharedArrayBuffer ? 'SharedArrayBuffer' : 'ArrayBuffer'}(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? (data ? data.byteLength - offset : " + byteOffset + "))" : ""}`);
 					else
 						start.push(`      super(data, offset, length ?? (data ? data.byteLength - offset : ${byteOffset}));`);
 
@@ -1151,7 +1160,7 @@ function compileDataView(input, pragmas = {}) {
 						classAlign = align;
 
 					if (flexibleArrayMember)
-						typescriptType = 'ArrayBuffer';
+						typescriptType = 'ArrayBufferLike';
 
 					if (doGet && !isPadding) {
 						output.push(jsdocComment);
