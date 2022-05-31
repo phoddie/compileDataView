@@ -706,12 +706,12 @@ function compileDataView(input, pragmas = {}) {
 						for (let parentClass = superClassName; parentClass; parentClass = classes[parentClass]?.superClassName)
 							interfaceTypes += ` & I${parentClass}`;
 						output.add({
-							javascript: `   static from(obj, size) {`,
+							javascript: `   static from(obj, size = ${byteOffset}) {`,
 							typescript: `   static from(obj: ${strictFrom ? 'Required' : 'Partial'}<${interfaceTypes}>, size = ${byteOffset}): ${className} {`
 						});
 						if (superClassName)
 							output.add({
-								javascript: `      const result = super.from(obj, size);`,
+								javascript: `      const result = super.from(obj, size.${flexibleArrayMember}.byteLength);`,
 								typescript: `      const result = <${className}> super.from(obj, size${flexibleArrayMember ? " + (<" + className + "> obj)." + flexibleArrayMember + ".byteLength" : ""});`
 							});
 						else
