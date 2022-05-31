@@ -113,7 +113,7 @@ let extendsClass;
 let imports;
 let outputByteLength;
 let checkByteLength;
-let useSharedArrayBuffer;
+let bufferAllocator;
 let union;
 let enumState;
 let enums;
@@ -479,8 +479,8 @@ function setPragma(setting, value) {
 			checkByteLength = booleanSetting(value, setting);
 			break;
 
-		case "useSharedArrayBuffer":
-			useSharedArrayBuffer = booleanSetting(value, setting);
+		case "bufferAllocator":
+			bufferAllocator = value;
 			break;
 
 		case "json":
@@ -558,7 +558,7 @@ function compileDataView(input, pragmas = {}) {
 	imports = [];
 	outputByteLength = false;
 	checkByteLength = true;
-	useSharedArrayBuffer = false;
+	bufferAllocator = "ArrayBuffer";
 	union = undefined;
 	enumState = undefined;
 	enums = new Set;
@@ -764,7 +764,7 @@ function compileDataView(input, pragmas = {}) {
 					});
 
 					if (!superClassName)
-						start.push(`      super(data ?? new ${useSharedArrayBuffer ? 'SharedArrayBuffer' : 'ArrayBuffer'}(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? (data ? data.byteLength - offset : " + byteOffset + "))" : ""}`);
+						start.push(`      super(data ?? new ${bufferAllocator}(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? (data ? data.byteLength - offset : " + byteOffset + "))" : ""}`);
 					else
 						start.push(`      super(data, offset, length ?? (data ? data.byteLength - offset : ${byteOffset}));`);
 
@@ -1080,6 +1080,9 @@ function compileDataView(input, pragmas = {}) {
 			let name = validateName(parts[pos++]);
 			const isPadding = name.startsWith(paddingPrefix);
 
+			if (flexibleArrayMember)
+				throw new Error(`Flexible array members ("uint8_t[]") must be last field`);
+
 			if (":" === parts[pos]) {
 				pos++;
 				bitCount = parseInt(parts[pos++]);
@@ -1122,7 +1125,7 @@ function compileDataView(input, pragmas = {}) {
 			if (";" !== parts[pos++])
 				throw new Error(`expected semicolon`);
 
-            let typescriptType = EnumTypes[EnumTypes.indexOf(type)];
+            let typescriptType = EnumTypes.includes(type) ? type : undefined;
 			if (TypeAliases[type])
 				type = TypeAliases[type];
 
@@ -1170,7 +1173,7 @@ function compileDataView(input, pragmas = {}) {
 							typescript: `   get ${name}(): ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `${type}Array`} {`
 						});
 						if (flexibleArrayMember) 
-							output.push(`      return this.buffer.slice(${byteOffset});`);
+							output.push(`      return new Uint8Array(this.buffer.slice(${byteOffset}));`);
 						else if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      return this.get${type}(${byteOffset});`);
