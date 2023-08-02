@@ -71,6 +71,8 @@ const TypeAliases = {
 	bool: "Boolean"
 };
 
+const EnumTypes = [];
+
 const TypeScriptTypeAliases = {
 	Uint8: "number",
 	Uint16: "number",
@@ -111,6 +113,7 @@ let extendsClass;
 let imports;
 let outputByteLength;
 let checkByteLength;
+let bufferAllocator;
 let union;
 let enumState;
 let enums;
@@ -132,6 +135,8 @@ let paddingPrefix;
 let injectInterface;
 let exports;
 let outputSource;
+let strictFrom;
+let flexibleArrayMember;
 
 class Output extends Array {
 	add(line) {
@@ -474,6 +479,10 @@ function setPragma(setting, value) {
 			checkByteLength = booleanSetting(value, setting);
 			break;
 
+		case "bufferAllocator":
+			bufferAllocator = value;
+			break;
+
 		case "json":
 			json = booleanSetting(value, setting);
 			break;
@@ -513,7 +522,11 @@ function setPragma(setting, value) {
 			outputSource = booleanSetting(value, setting);
 			break;
 
-		default:
+		case 'strictFrom':
+			strictFrom = booleanSetting(value, setting);
+			break;
+
+        default:
 			throw new Error(`unknown pragma "${setting}"`);
 			break;
 	}
@@ -545,6 +558,7 @@ function compileDataView(input, pragmas = {}) {
 	imports = [];
 	outputByteLength = false;
 	checkByteLength = true;
+	bufferAllocator = "ArrayBuffer";
 	union = undefined;
 	enumState = undefined;
 	enums = new Set;
@@ -565,6 +579,8 @@ function compileDataView(input, pragmas = {}) {
 	injectInterface = [];
 	exports = [];
 	outputSource = true;
+	strictFrom = false;
+	flexibleArrayMember = undefined;
 
 	final = [];
 	const errors = [];
@@ -636,6 +652,9 @@ function compileDataView(input, pragmas = {}) {
 							javascript: `});`,
 							typescript: `}`,
 						});
+						output.add({
+							typescript: `(<unknown> ${className}) = Object.freeze(${className});`,
+						});
 						output.push(``);
 
 						final = final.concat(output);
@@ -649,6 +668,7 @@ function compileDataView(input, pragmas = {}) {
 							alignLength: enumBackingBytes 
 						};
 						TypeAliases[className] = enumBackingType;
+                        EnumTypes.push(className);
 					}
 
 					enumState = undefined;
@@ -686,21 +706,22 @@ function compileDataView(input, pragmas = {}) {
 						for (let parentClass = superClassName; parentClass; parentClass = classes[parentClass]?.superClassName)
 							interfaceTypes += ` & I${parentClass}`;
 						output.add({
-							javascript: `   static from(obj) {`,
-							typescript: `   static from(obj: ${interfaceTypes}): ${className} {`
+							javascript: `   static from(obj, size = ${byteOffset}) {`,
+							typescript: `   static from(obj: ${strictFrom ? 'Required' : 'Partial'}<${interfaceTypes}>, size = ${byteOffset}): ${className} {`
 						});
 						if (superClassName)
 							output.add({
-								javascript: `      const result = super.from(obj);`,
-								typescript: `      const result = <${className}> super.from(obj);`
+								javascript: `      const result = super.from(obj, size.${flexibleArrayMember}.byteLength);`,
+								typescript: `      const result = <${className}> super.from(obj, size${flexibleArrayMember ? " + (<" + className + "> obj)." + flexibleArrayMember + ".byteLength" : ""});`
 							});
 						else
-							output.push(`      const result = new this();`);
+							output.push(`      const result = new this(undefined, 0, size);`);
 						output = output.concat(fromOutput.map(e => e.replace("##LATE_CAST##", className)));
 						output.push(`      return result;`);
 						output.push(`   }`);
 					}
 					fromOutput.length = 0;
+					flexibleArrayMember = undefined;
 				}
 
 				output.push(`}`);
@@ -738,14 +759,14 @@ function compileDataView(input, pragmas = {}) {
 
 				if (byteOffset > 0) {
 					start.add({
-						javascript: `   constructor(data, offset = 0, length = ${byteOffset}) {`,
-						typescript: `   constructor(data?: ArrayBufferLike, offset = 0, length = ${byteOffset}) {`
+						javascript: `   constructor(data, offset = 0, length) {`,
+						typescript: `   constructor(data?: ArrayBufferLike, offset = 0, length?: number) {`
 					});
 
 					if (!superClassName)
-						start.push(`      super(data ?? new ArrayBuffer(offset + length), offset${checkByteLength ? ", length" : ""})`);
+						start.push(`      super(data ?? new ${bufferAllocator}(offset + (length ?? ${byteOffset})), offset${checkByteLength ? ", length ?? (data ? data.byteLength - offset : " + byteOffset + "))" : ""}`);
 					else
-						start.push(`      super(data, offset, length);`);
+						start.push(`      super(data, offset, length ?? (data ? data.byteLength - offset : ${byteOffset}));`);
 
 					if (classUsesEndian) {
 						start.push(`      this.setUint8(0, 1);`);
@@ -1054,10 +1075,13 @@ function compileDataView(input, pragmas = {}) {
 				continue;
 			}
 
-
+			
 			let type = part;
 			let name = validateName(parts[pos++]);
 			const isPadding = name.startsWith(paddingPrefix);
+
+			if (flexibleArrayMember)
+				throw new Error(`Flexible array members ("uint8_t[]") must be last field`);
 
 			if (":" === parts[pos]) {
 				pos++;
@@ -1067,21 +1091,30 @@ function compileDataView(input, pragmas = {}) {
 			}
 			else {
 				if ("[" == parts[pos]) {
-					const bracket = parts.indexOf("]", pos + 1);
-					if (bracket < 0)
-						throw new Error(`right brace expected`);
+					if ("]" == parts[pos + 1]) {
+						pos = pos + 2;
+						if ("uint8_t" != type)
+							throw new Error(`Flexible array members ("[]") are only allowed on "uint8_t", but found on "${type}"`);
+						if (flexibleArrayMember)
+							throw new Error(`Only one flexible array member ("[]") is allowed in a struct`);
+						flexibleArrayMember = name;
+					} else {
+						const bracket = parts.indexOf("]", pos + 1);
+						if (bracket < 0)
+							throw new Error(`right brace expected`);
 
-					const expression = parts.slice(pos + 1, bracket).join(" ");
-					let context = "(function () {\n" + enumContext;
-					context += `return ${expression};\n`;
-					context += `})();`
+						const expression = parts.slice(pos + 1, bracket).join(" ");
+						let context = "(function () {\n" + enumContext;
+						context += `return ${expression};\n`;
+						context += `})();`
 
-					arrayCount = eval(context);
-					pos = bracket + 1;
+						arrayCount = eval(context);
+						pos = bracket + 1;
 
-					arrayCount = Math.round(arrayCount);
-					if ((arrayCount <= 0) || isNaN(arrayCount) || (Infinity === arrayCount))
-						throw new Error(`invalid array count`);
+						arrayCount = Math.round(arrayCount);
+						if ((arrayCount <= 0) || isNaN(arrayCount) || (Infinity === arrayCount))
+							throw new Error(`invalid array count`);
+					}
 				}
 			}
 
@@ -1092,6 +1125,7 @@ function compileDataView(input, pragmas = {}) {
 			if (";" !== parts[pos++])
 				throw new Error(`expected semicolon`);
 
+            let typescriptType = EnumTypes.includes(type) ? type : undefined;
 			if (TypeAliases[type])
 				type = TypeAliases[type];
 
@@ -1128,14 +1162,19 @@ function compileDataView(input, pragmas = {}) {
 					if (classAlign < align)
 						classAlign = align;
 
+					if (flexibleArrayMember)
+						typescriptType = 'ArrayBufferLike';
+
 					if (doGet && !isPadding) {
 						output.push(jsdocComment);
 
 						output.add({
 							javascript: `   get ${name}() {`,
-							typescript: `   get ${name}(): ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `${type}Array`} {`
+							typescript: `   get ${name}(): ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `${type}Array`} {`
 						});
-						if (undefined === arrayCount) {
+						if (flexibleArrayMember) 
+							output.push(`      return new Uint8Array(this.buffer.slice(${byteOffset})).buffer;`);
+						else if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      return this.get${type}(${byteOffset});`);
 							else {
@@ -1163,10 +1202,12 @@ function compileDataView(input, pragmas = {}) {
 
 						output.add({
 							javascript: `   set ${name}(value) {`,
-							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
+							typescript: `   set ${name}(value: ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `ArrayLike<${TypeScriptTypeAliases[type]}>`}) {`,
 						});
 						output.push();
-						if (undefined === arrayCount) {
+						if (flexibleArrayMember)
+							output.push(`      new Uint8Array(this.buffer).set(new Uint8Array(value), ${byteOffset});`);
+						else if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      this.set${type}(${byteOffset}, value);`);
 							else {
@@ -1193,7 +1234,8 @@ function compileDataView(input, pragmas = {}) {
 						output.push(`   }`);
 					}
 
-					endField((arrayCount ?? 1) * byteCount);
+					if (!flexibleArrayMember)
+						endField((arrayCount ?? 1) * byteCount);
 
 					if (!isPadding) {
 						if (undefined === arrayCount)
@@ -1215,7 +1257,7 @@ function compileDataView(input, pragmas = {}) {
 						throw new Error(`char cannot use bitfield`);
 
 					if (doGet && !isPadding) {
-+						output.push(jsdocComment);
+						output.push(jsdocComment);
 
 						output.add({
 							javascript: `   get ${name}() {`,

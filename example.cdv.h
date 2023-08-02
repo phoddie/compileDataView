@@ -6,6 +6,7 @@
    #pragma json(true)                  // include JSON methods
    #pragma language(typescript/node)   // use TypeScript with Node style string buffers
    #pragma outputByteLength(true)      // include length of structures in output
+   #pragma strictFrom(true)            // require all properties on 'from` methods
 #endif
 
 // Line comments are always ignored
@@ -204,4 +205,21 @@ struct TypeThree : TypeOne {
 #if defined(__LANGUAGE_TYPESCRIPT__)
    #pragma inject(type BaseTypes = ITypeOne | ITypeTwo | ITypeThree)
 #endif
+
+/* Example of using flexible array members at end of a struct */
+struct Variable {
+   uint16_t one;
+   uint32_t two;
+   char three;
+   uint8_t data[];
+};
+
+struct SuperVariable {
+   uint16_t myNumber;
+};
+
+struct SubVariable : SuperVariable {
+   uint32_t more;
+   uint8_t data[];
+};
 

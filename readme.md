@@ -215,7 +215,7 @@ let i = IntroView.from({
 });
 ```
 
-To use the `from` feature, set `#pragma json(true)` when compiling the view.
+To use the `from` feature, set `#pragma json(true)` when compiling the view.  When generating TypeScript, you can optionally use [`#pragma strictFrom(true)`](#strictFrom) to require all fields (versus the default of all fields are optional).
 
 <a id="stringify"></a>
 #### Serializing a binary data structure to JSON
@@ -415,6 +415,24 @@ i.str = "12"; // ok
 i.str = "123456789"; // throws
 ```
 
+<a id="flexible-array-members"></a>
+#### Flexible array members
+
+Some data structures, common with networking protocols, consist of a header followed by an arbitrary length collection of bytes.  This can be implemented in a `struct` using the `uint8_t var[]` notation (empty array).  You can have only one of these per `struct`, and it must be the last member defined.  It also may not be [inherited](#inheritance) (it must be the final subclass). 
+
+```js
+struct MyStruct : SuperStruct {
+   uint32_t someData;
+   uint8_t data[];
+}
+```
+
+To instantiate a new object that has the correct length buffer, use the static [`from`](#json) method which will determine the size of the provided `ArrayBuffer` to allocate the correct buffer size.
+
+```js
+MyStruct.from({ someData: 32, data: myArrayBuffer });
+```
+
 <a id="type-nested"></a>
 #### Nested types
 View declared in a description can be nested in views that follow it by using the class name as the type.
@@ -557,6 +575,8 @@ The following pragmas are available (first option is the default):
 - [`outputByteLength(false | true)`](#outputbytelength)
 - [`outputSource(true | false)`](#outputsource)
 - [`pack(16 | 8 | 4 | 2 | 1)`](#pack)
+- [`strictFrom(false | true)`](#strictFrom)
+- [`bufferAllocator(ArrayBuffer | <any allocator>)`](#bufferAllocator)
 
 #### `extends`
 The `extends` pragma defines the name of the class the generated class extends. The default value is `DataView` and it is rarely necessary to use another value. For example, the following pragma
@@ -766,6 +786,16 @@ import { myMethod } from "./MyClass";
 ```
 
 Import pragmas may be placed anywhere in the content, but are always be injected at the top of the file (after the first comment if provided).
+
+<a id="strictFrom"></a>
+#### `strictFrom`
+
+When generating TypeScript and using the pragma `json` to generate the `from` method (see [initialize](#initialize)), this option will change the types to require all properties (using the utility type `Required`).  The default (`false`) is to allow a subset of properties to be provided (using the utility type `Partial`).  
+
+<a id="bufferAllocator"></a>
+#### `bufferAllocator`
+
+By default, `ArrayBuffer` is used for all buffer allocations.  Setting `bufferAllocator` to a buffer constructor will use a user defined allocator.  This is useful with `SharedArrayBuffer` for sharing memory across workers as well as to use  the system heap for memory allocations (a separate memory domain on Moddable) instead of chunks.  This pragma may be turned on/off throughout the file to switch the allocation type used on a per-element basis.
 
 <!--
 #### `inject` and `injectInterface`
