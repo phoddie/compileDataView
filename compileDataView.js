@@ -1173,7 +1173,7 @@ function compileDataView(input, pragmas = {}) {
 							typescript: `   get ${name}(): ${(undefined === arrayCount) ? typescriptType ?? TypeScriptTypeAliases[type] : `${type}Array`} {`
 						});
 						if (flexibleArrayMember) 
-							output.push(`      return new Uint8Array(this.buffer.slice(${byteOffset}));`);
+							output.push(`      return new Uint8Array(this.buffer.slice(${byteOffset})).buffer;`);
 						else if (undefined === arrayCount) {
 							if (1 === byteCount)
 								output.push(`      return this.get${type}(${byteOffset});`);
