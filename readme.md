@@ -1,8 +1,8 @@
 # CompileDataView
 
-Copyright 2021-2022 Moddable Tech, Inc.<BR>
+Copyright 2021-2025 Moddable Tech, Inc.<BR>
 Author: Peter Hoddie<BR>
-Revised: April 5, 2022
+Revised: January 24, 2025
 
 ## Table of Contents
 
@@ -288,9 +288,9 @@ CompileDataView supports all the types of values provided by `DataView` and adds
 
 <a id="type-numbers"></a>
 #### Numbers
-All the numeric types defined by `DataView` are available: `Int8`, `Int16`, `Int32`, `Uint8`, `Uint16`, `Uint32`, `BigInt64`, `BigUint64`, `Float32`, and `Float64`.
+All the numeric types defined by `DataView` are available: `Int8`, `Int16`, `Int32`, `Uint8`, `Uint16`, `Uint32`, `BigInt64`, `BigUint64`, `Float16`, `Float32`, and `Float64`.
 
-To match the C language, `DataView` numeric types are also available using standard C type names: `int8_t`, `int16_t`, `int32_t`, `uint8_t`, `uint16_t`, `uint32_t`, `int64_t`, `uint64_t`, `float`, and `double`.
+To match the C language, `DataView` numeric types are also available using standard C type names: `int8_t`, `int16_t`, `int32_t`, `uint8_t`, `uint16_t`, `uint32_t`, `int64_t`, `uint64_t`, `float16_t`, `float32_t`, `float64_t`, `float`, and `double`.
 
 ```c
 struct Example {
@@ -607,7 +607,7 @@ Excluding getters or setters generates less code and has no performance impact. 
 #### `endian`
 The `endian` pragma controls how multi-byte numeric values are stored. The default is `"host"` which matches the host endianness at runtime.  Other options are "little" for little-endian order and `"big"` for big-endian. Views that are used to only reduce the memory required for properties should not change the `endian` pragma from the default as native machine order is the most efficient.
 
-The numeric types that `endian` effects are `Float32`, `Float64`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`. The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
+The numeric types that `endian` effects are `Float16`, `Float32`, `Float64`, `Int16`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`. The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
 
 #### `pack`
 The `pack` pragma controls the alignment of multi-byte numeric values. The default is `16` which causes values to be aligned based on the size the fields they contain. The default is generally compatible with C and safe for all JavaScript operations. Supported values are `1`, `2`, `4`, `8`, and `16`. Passing no argument for pack (`#pragma pack()`) restores the default.

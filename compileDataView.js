@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2021-2022  Moddable Tech, Inc.
+* Copyright (c) 2021-2025  Moddable Tech, Inc.
 *
 *   This file is part of the Moddable SDK Tools.
 *
@@ -37,6 +37,7 @@ const byteCounts = {
 	Uint8: 1,
 	Uint16: 2,
 	Uint32: 4,
+	Float16: 2,
 	Float32: 4,
 	Float64: 8,
 	BigInt64: 8,
@@ -50,6 +51,7 @@ const shiftCounts = {
 	Uint8: 0,
 	Uint16: 1,
 	Uint32: 2,
+	Float16: 1,
 	Float32: 2,
 	Float64: 3,
 	BigInt64: 3,
@@ -65,6 +67,9 @@ const TypeAliases = {
 	int16_t:  "Int16",
 	int32_t:  "Int32",
 	int64_t:  "BigInt64",
+	float16_t:  "Float16",
+	float32_t:  "Float32",
+	float64_t:  "Float64",
 	float:  "Float32",
 	double:  "Float64",
 	boolean: "Boolean",
@@ -80,6 +85,7 @@ const TypeScriptTypeAliases = {
 	Int16: "number",
 	Int32: "number",
 	BigInt64: "bigint",
+	Float16: "number",
 	Float32: "number",
 	Float64: "number",
 	Boolean: "boolean"
@@ -1105,6 +1111,7 @@ function compileDataView(input, pragmas = {}) {
 			}
 
 			switch (type) {
+				case "Float32":
 				case "Float32":
 				case "Float64":
 				case "Int8":
