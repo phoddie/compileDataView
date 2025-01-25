@@ -551,6 +551,7 @@ The following pragmas are available (first option is the default):
 - [`export(true, false)`](#export)
 - [`extends(DataView | <custom>)`](#extends)
 - [`get(true | false)` and `set(true | false)`](#get-and-set)
+- [`hostEndian(unknown | little | big)`](#hostendian)
 - [`import(<import syntax>)`](#import)
 - [`json(false | true)`](#json)
 - [`language('javascript/xs' | <javascript | typescript>{/<xs | web | node>})`](#language)
@@ -608,6 +609,9 @@ Excluding getters or setters generates less code and has no performance impact. 
 The `endian` pragma controls how multi-byte numeric values are stored. The default is `"host"` which matches the host endianness at runtime.  Other options are "little" for little-endian order and `"big"` for big-endian. Views that are used to only reduce the memory required for properties should not change the `endian` pragma from the default as native machine order is the most efficient.
 
 The numeric types that `endian` effects are `Float16`, `Float32`, `Float64`, `Int16`, `Int32`, `Uint16`, `Uint32`, `BigInt64`, and `BigUint64`. The `endian` pragma also controls the endianness of multi-byte integers that store bitfields.
+
+#### `hostendian`
+The `hostendian` pragma indicates the endianness of the host where the generated code will run. Values are `"big"`, `"little"`, and `"unknown"`. The default is `"unknown"`. Setting the host endian to `"big"` or `"little"` generates code which is less portable but more efficient. Because many embedded projects know precisely what hardware they will run on, portability is less interesting than efficiency gains.
 
 #### `pack`
 The `pack` pragma controls the alignment of multi-byte numeric values. The default is `16` which causes values to be aligned based on the size the fields they contain. The default is generally compatible with C and safe for all JavaScript operations. Supported values are `1`, `2`, `4`, `8`, and `16`. Passing no argument for pack (`#pragma pack()`) restores the default.
