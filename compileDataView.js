@@ -1111,7 +1111,7 @@ function compileDataView(input, pragmas = {}) {
 			}
 
 			switch (type) {
-				case "Float32":
+				case "Float16":
 				case "Float32":
 				case "Float64":
 				case "Int8":
