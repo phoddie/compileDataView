@@ -1,23 +1,73 @@
 <!DOCTYPE html>
-<html>
-	<head>
-		<meta charset="utf-8">
-		<meta name="Description" content="compileDataView">
-		<title>Compile Data View</title>
-		<script type="module" crossorigin src="./compileDataView.js"></script>
-		<style>
-textarea {
-	resize: none;
-	font-family: monospace;
-	font-size: 16px;
-	font-weight: 500,
-	background-color:#fcfcfc;
-}
-		</style>
-	</head>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+	<meta name="Description" content="compileDataView">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compile Data View</title>
+	<script type="module" crossorigin src="./compileDataView.js" id="compileDataView"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/languages/javascript.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/codemirror.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.0/mode/javascript/javascript.min.js"></script>
+    <style>
+        body {
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            width: 100;
+            height: 90vh;
+            gap: 10px;
+        }
+        .editor, .output {
+            width: 50%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .CodeMirror {
+            flex: 1;
+            font-size: 15px;
+        }
+        pre {
+            flex: 1;
+            overflow: auto;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background: #f4f4f4;
+        }
+        code {
+            font-family: monospace;
+            font-size: 15px;
+        }
+        button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            cursor: pointer;
+        },
+    </style>
+</head>
 <body>
+    <div class="container">
+        <div class="editor">
+            <textarea id="cCode"></textarea>
+        </div>
+        <pre><code id="jsCode" class="language-javascript"></code></pre>
+    </div>
+    <button id="copyButton">Copy JavaScript</button>
 
-<script>
+	<br/><p>See the CompileDataView <a href="https://github.com/phoddie/compileDataView/">repository</a> for <a href="https://github.com/phoddie/compileDataView/blob/master/readme.md">documentation</a> and <a href="https://github.com/phoddie/compileDataView/blob/master/compileDataView.js">source code</a>.</p>
+
+    <script>
 const defaultDescription =
 `#if defined(__COMPILEDATAVIEW__)
    #pragma language(javascript/xs)
@@ -122,26 +172,38 @@ enum Masks {
    b = 0x00FF0000
 };
 `;
-</script>
 
-<textarea id="viewDescription" name="viewDescription" rows="40" cols="40" spellcheck="false" autofocus="true"></textarea>
-<textarea id="viewCode" name="viewCode" rows="40" cols="60" readonly="true" spellcheck="false"></textarea>
+        const cEditor = CodeMirror.fromTextArea(document.getElementById("cCode"), {
+            mode: "text/x-csrc",
+            lineNumbers: true,
+            theme: "default"
+        });
+        cEditor.setValue(defaultDescription);
+        updateJavaScript();
 
-<br>See the CompileDataView <a href="https://github.com/phoddie/compileDataView/">repository</a> for <a href="https://github.com/phoddie/compileDataView/blob/master/readme.md">documentation</a> and <a href="https://github.com/phoddie/compileDataView/blob/master/compileDataView.js">source code</a>.
+        function updateJavaScript() {
+            const cSource = cEditor.getValue();
+            try {
+				const generated = compileDataView(cSource);
+				jsOutput = generated.errors + generated.script;
+                document.getElementById("jsCode").textContent = jsOutput;
+                hljs.highlightElement(document.getElementById("jsCode"));
+            } catch (error) {
+                document.getElementById("jsCode").textContent = "Error: " + error.message;
+            }
+        }
 
-<script type="module" crossorigin>
-const viewDescription = document.getElementById('viewDescription');
-viewDescription.textContent = defaultDescription;
+        cEditor.on("change", updateJavaScript);
 
-const viewCode = document.getElementById('viewCode');
-const generated = compileDataView(viewDescription.value);
-viewCode.textContent = generated.errors + generated.script;
+        document.getElementById("copyButton").addEventListener("click", function() {
+            navigator.clipboard.writeText(document.getElementById("jsCode").textContent);
+        });
 
-viewDescription.addEventListener('input', e => {
-	const generated = compileDataView(e.target.value);
-	viewCode.textContent = generated.errors + generated.script;
-});
+		document.getElementById('compileDataView').addEventListener('load', function() {
+             cEditor.setValue(defaultDescription);
+             updateJavaScript();
+		});
 </script>
 
 </body>
-<//html>
+</html>
